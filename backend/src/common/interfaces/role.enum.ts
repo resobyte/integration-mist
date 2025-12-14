@@ -1,0 +1,4 @@
+export enum Role {
+  PLATFORM_OWNER = 'PLATFORM_OWNER',
+  OPERATION = 'OPERATION',
+}

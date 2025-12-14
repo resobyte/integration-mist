@@ -1,0 +1,120 @@
+---
+alwaysApply: true
+---
+
+
+You are working on a production-grade Admin Panel Boilerplate.
+
+This repository is designed to be reusable across multiple projects.
+All decisions must prioritize security, clarity, and maintainability.
+
+---
+
+## GLOBAL RULES
+
+- Always use TypeScript
+- Never use `any`
+- Prefer `interface` and `enum`
+- Avoid over-engineering
+- Do not add features unless explicitly requested
+- Do not use comments inside code unless explicitly asked
+- Keep code readable and explicit
+- Favor composition over abstraction
+
+---
+
+## FRONTEND RULES (Next.js)
+
+- Use App Router
+- Server Components by default
+- Client Components only when:
+  - handling forms
+  - handling user interaction
+- Do NOT perform role checks in client components
+- Authorization must happen at:
+  - middleware
+  - server components
+- Unauthorized routes must:
+  - not be generated
+  - not be accessible
+  - not appear in navigation
+
+---
+
+## ROUTING & LAYOUT
+
+- Routes must be role-aware
+- Sidebar items must be generated from allowed routes only
+- Layout must not contain business logic
+- Layout must be reusable
+- Avoid deeply nested layouts
+
+---
+
+## STATE MANAGEMENT
+
+- Prefer server state
+- Avoid global client state
+- Do not introduce state libraries unless explicitly required
+
+---
+
+## UI & STYLING
+
+- Use Tailwind CSS
+- Theme values must come from CSS variables
+- Colors and fonts must be configurable
+- No inline styles
+- Responsive by default
+
+---
+
+## BACKEND RULES (NestJS)
+
+- Every controller must be protected by Guards
+- No public endpoints unless explicitly required
+- Use DTO validation for all inputs
+- Do not expose entities directly in API responses
+- Centralize error handling
+- Keep modules isolated and cohesive
+
+---
+
+## AUTHENTICATION & SECURITY
+
+- Never store tokens in localStorage or sessionStorage
+- Use HttpOnly cookies for tokens
+- Refresh tokens must be revocable
+- Token blacklist must be supported
+- Role escalation must not be possible
+- Sensitive logic must stay on the backend
+- Use UUID
+
+---
+
+## DATABASE
+
+- Use BaseEntity pattern
+- Soft delete support is mandatory
+- Use migrations-ready structure
+- Avoid tight coupling between entities
+
+---
+
+## GENERIC UTILITIES
+
+- Use generic response structures:
+  - ApiResponse<T>
+  - PaginationResponse<T>
+  - ErrorResponse
+- Use enum-based role definitions
+- Share role definitions consistently
+
+---
+
+## CODE STYLE
+
+- Clean
+- Explicit
+- Predictable
+- Production-ready

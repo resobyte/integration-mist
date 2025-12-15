@@ -12,25 +12,24 @@ interface InfoCardProps {
 
 export function InfoCard({ title, value, icon, trend }: InfoCardProps) {
   return (
-    <div className="bg-card rounded-lg border border-border p-6">
-      <div className="flex items-start justify-between">
+    <div className="bg-card p-6 rounded-xl border border-border shadow-sm hover:shadow-md transition-shadow">
+      <div className="flex justify-between items-start">
         <div>
-          <p className="text-sm text-muted-foreground">{title}</p>
-          <p className="text-2xl font-bold mt-1">{value}</p>
-          {trend && (
-            <p
-              className={`text-sm mt-2 ${
-                trend.isPositive ? 'text-success' : 'text-destructive'
-              }`}
-            >
-              {trend.isPositive ? '↑' : '↓'} {Math.abs(trend.value)}%
-            </p>
-          )}
+          <p className="text-sm font-medium text-muted-foreground mb-1">{title}</p>
+          <h3 className="text-2xl font-bold text-foreground">{value}</h3>
         </div>
         {icon && (
-          <div className="p-3 bg-primary/10 rounded-lg text-primary">{icon}</div>
+          <div className="p-2 bg-primary/10 rounded-lg text-primary">{icon}</div>
         )}
       </div>
+      {trend && (
+        <div className="mt-4 flex items-center text-sm">
+          <span className={`${trend.isPositive ? 'text-success' : 'text-destructive'} font-medium mr-2`}>
+            {trend.isPositive ? '+' : '-'}{Math.abs(trend.value)}%
+          </span>
+          <span className="text-muted-foreground">from last month</span>
+        </div>
+      )}
     </div>
   );
 }

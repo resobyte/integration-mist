@@ -10,6 +10,7 @@ const config: Config = {
     extend: {
       colors: {
         primary: 'var(--color-primary)',
+        'primary-dark': 'var(--color-primary-dark)',
         background: 'var(--color-background)',
         foreground: 'var(--color-foreground)',
         muted: 'var(--color-muted)',
@@ -23,6 +24,7 @@ const config: Config = {
       },
       fontFamily: {
         sans: ['var(--font-family)', 'system-ui', 'sans-serif'],
+        rubik: ['Rubik', 'sans-serif'],
       },
     },
   },

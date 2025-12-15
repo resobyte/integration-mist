@@ -12,16 +12,13 @@ export default async function AccountPage() {
 
   return (
     <AppLayout user={user} currentPath="/account">
-      <div className="space-y-6">
+      <div className="max-w-2xl mx-auto space-y-6">
         <div>
-          <h1 className="text-2xl font-bold">Account</h1>
-          <p className="text-muted-foreground">Manage your account settings</p>
+          <h2 className="text-3xl font-bold text-foreground font-rubik">Account Settings</h2>
+          <p className="text-muted-foreground mt-1">Manage your profile and security settings.</p>
         </div>
 
-        <div className="bg-card rounded-lg border border-border p-6 max-w-2xl">
-          <h2 className="text-lg font-semibold mb-4">Profile Information</h2>
-          <AccountForm user={user} />
-        </div>
+        <AccountForm user={user} />
       </div>
     </AppLayout>
   );

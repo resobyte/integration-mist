@@ -41,69 +41,62 @@ export function Table<T extends object>({
 
   const renderSortIcon = (columnKey: string) => {
     if (!sortConfig || sortConfig.sortBy !== columnKey) {
-      return (
-        <svg className="w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-        </svg>
-      );
+      return null;
     }
 
     return sortConfig.sortOrder === 'ASC' ? (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
       </svg>
     ) : (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
       </svg>
     );
   };
 
   return (
-    <div className="w-full">
-      <div className="overflow-x-auto rounded-lg border border-border">
-        <table className="w-full">
-          <thead className="bg-muted">
-            <tr>
+    <div className="w-full bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="bg-muted/30 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               {columns.map((column) => (
                 <th
                   key={String(column.key)}
-                  className={`px-4 py-3 text-left text-sm font-medium text-foreground ${
-                    column.sortable ? 'cursor-pointer hover:bg-muted/80' : ''
+                  className={`px-6 py-3 ${
+                    column.sortable ? 'cursor-pointer hover:bg-muted/50 transition-colors' : ''
                   }`}
                   onClick={() => column.sortable && handleSort(String(column.key))}
                 >
-                  <div className="flex items-center gap-2">
-                    {column.header}
+                  <div className="flex items-center space-x-1">
+                    <span>{column.header}</span>
                     {column.sortable && renderSortIcon(String(column.key))}
                   </div>
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody className="bg-card divide-y divide-border">
+          <tbody className="divide-y divide-border">
             {isLoading ? (
               <tr>
-                <td colSpan={columns.length} className="px-4 py-8 text-center">
+                <td colSpan={columns.length} className="px-6 py-8 text-center">
                   <div className="flex justify-center">
-                    <svg className="animate-spin h-6 w-6 text-primary" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
+                    <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                   </div>
                 </td>
               </tr>
             ) : data.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} className="px-4 py-8 text-center text-muted-foreground">
+                <td colSpan={columns.length} className="px-6 py-8 text-center text-muted-foreground">
                   {emptyMessage}
                 </td>
               </tr>
             ) : (
               data.map((item) => (
-                <tr key={keyExtractor(item)} className="hover:bg-muted/50">
+                <tr key={keyExtractor(item)} className="hover:bg-muted/20 transition-colors group">
                   {columns.map((column) => (
-                    <td key={String(column.key)} className="px-4 py-3 text-sm">
+                    <td key={String(column.key)} className="px-6 py-4 text-sm">
                       {column.render
                         ? column.render(item)
                         : String((item as Record<string, unknown>)[String(column.key)] ?? '')}
@@ -117,7 +110,7 @@ export function Table<T extends object>({
       </div>
 
       {pagination && pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-card">
+        <div className="flex items-center justify-between px-6 py-4 border-t border-border bg-muted/10">
           <div className="text-sm text-muted-foreground">
             Showing {((pagination.page - 1) * pagination.limit) + 1} to{' '}
             {Math.min(pagination.page * pagination.limit, pagination.total)} of{' '}
@@ -127,14 +120,14 @@ export function Table<T extends object>({
             <button
               onClick={() => onPageChange?.(pagination.page - 1)}
               disabled={pagination.page <= 1}
-              className="px-3 py-1.5 text-sm border border-border rounded-md hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 text-sm font-medium border border-input rounded-lg hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               Previous
             </button>
             <button
               onClick={() => onPageChange?.(pagination.page + 1)}
               disabled={pagination.page >= pagination.totalPages}
-              className="px-3 py-1.5 text-sm border border-border rounded-md hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 text-sm font-medium border border-input rounded-lg hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               Next
             </button>

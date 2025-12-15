@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -6,6 +8,7 @@
   --font-family: 'Rubik', system-ui, sans-serif;
 
   --color-primary: #800020;
+  --color-primary-dark: #5e0017;
   --color-background: #ffffff;
   --color-foreground: #0a0a0a;
   --color-muted: #f5f5f5;
@@ -42,22 +45,22 @@
 
 @layer components {
   .btn {
-    @apply inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center rounded-lg text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed;
     --tw-ring-color: var(--color-primary);
   }
 
   .btn-primary {
-    @apply text-white;
+    @apply text-white shadow-md;
     background-color: var(--color-primary);
   }
 
   .btn-primary:hover:not(:disabled) {
-    filter: brightness(0.9);
-    cursor: pointer;
+    background-color: var(--color-primary-dark);
+    @apply shadow-lg;
   }
 
   .btn-primary:active:not(:disabled) {
-    filter: brightness(0.85);
+    @apply scale-[0.98];
   }
 
   .btn-secondary {
@@ -70,12 +73,13 @@
   }
 
   .btn-destructive {
-    @apply text-white;
+    @apply text-white shadow-md;
     background-color: var(--color-destructive);
   }
 
   .btn-destructive:hover:not(:disabled) {
     filter: brightness(0.9);
+    @apply shadow-lg;
   }
 
   .btn-outline {
@@ -91,7 +95,7 @@
   }
 
   .input-base {
-    @apply flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50;
+    @apply flex h-10 w-full rounded-lg border border-input bg-muted/20 px-3 py-2 text-sm transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50;
     --tw-ring-color: var(--color-primary);
   }
 
@@ -99,7 +103,15 @@
     color: var(--color-muted-foreground);
   }
 
-  .input-base:focus-visible {
-    @apply outline-none ring-2 ring-offset-2;
+  .input-base:focus {
+    @apply outline-none ring-2 ring-primary border-primary;
+  }
+
+  .card {
+    @apply bg-card rounded-xl border border-border shadow-sm;
+  }
+
+  .card-hover {
+    @apply transition-shadow duration-200 hover:shadow-md;
   }
 }

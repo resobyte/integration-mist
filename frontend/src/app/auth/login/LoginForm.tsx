@@ -2,8 +2,6 @@
 
 import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Input } from '@/components/common/Input';
-import { Button } from '@/components/common/Button';
 import { getDefaultRouteByRole } from '@/config/routes';
 
 export function LoginForm() {
@@ -53,44 +51,76 @@ export function LoginForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 relative z-10">
-      <div className="space-y-4">
-        <Input
-          label="Email"
-          type="email"
-          name="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="Enter your email"
-          required
-          autoComplete="email"
-          disabled={isPending}
-        />
-        <Input
-          label="Password"
-          type="password"
-          name="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="Enter your password"
-          required
-          autoComplete="current-password"
-          disabled={isPending}
-        />
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div>
+        <label className="block text-sm font-medium text-foreground mb-1.5">Email Address</label>
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-muted-foreground">
+            <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <input
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            disabled={isPending}
+            className="block w-full pl-10 pr-3 py-2.5 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-all outline-none bg-muted/20 text-foreground disabled:opacity-50"
+            placeholder="admin@example.com"
+          />
+        </div>
       </div>
+
+      <div>
+        <label className="block text-sm font-medium text-foreground mb-1.5">Password</label>
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-muted-foreground">
+            <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          </div>
+          <input
+            type="password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            disabled={isPending}
+            className="block w-full pl-10 pr-3 py-2.5 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-all outline-none bg-muted/20 text-foreground disabled:opacity-50"
+            placeholder="••••••••"
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between text-sm">
+        <label className="flex items-center text-muted-foreground cursor-pointer">
+          <input type="checkbox" className="mr-2 rounded border-input text-primary focus:ring-primary" />
+          Remember me
+        </label>
+        <a href="#" className="text-primary hover:text-primary-dark font-medium transition-colors">Forgot password?</a>
+      </div>
+
       {error && (
-        <div className="p-3 bg-destructive/10 text-destructive text-sm rounded-md border border-destructive/20">
+        <div className="p-3 bg-destructive/10 text-destructive text-sm rounded-lg border border-destructive/20">
           {error}
         </div>
       )}
-      <Button 
-        type="submit" 
-        className="w-full relative z-10" 
-        isLoading={isPending}
+
+      <button
+        type="submit"
         disabled={isPending || !email || !password}
+        className="w-full bg-primary hover:bg-primary-dark text-white font-bold py-3 px-4 rounded-lg transition-all duration-200 transform active:scale-[0.98] shadow-md flex justify-center items-center disabled:opacity-70 disabled:cursor-not-allowed"
       >
-        Sign In
-      </Button>
+        {isPending ? (
+          <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+        ) : (
+          'Sign In'
+        )}
+      </button>
+
+      <div className="text-center text-sm text-muted-foreground">
+        Don&apos;t have an account? <a href="#" className="text-primary font-medium hover:underline">Contact Support</a>
+      </div>
     </form>
   );
 }

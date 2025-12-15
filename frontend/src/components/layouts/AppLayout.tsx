@@ -1,4 +1,8 @@
+'use client';
+
+import { useState } from 'react';
 import { AuthUser } from '@/types';
+import { getSidebarRoutesByRole } from '@/config/routes';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 
@@ -9,15 +13,23 @@ interface AppLayoutProps {
 }
 
 export function AppLayout({ children, user, currentPath }: AppLayoutProps) {
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const routes = getSidebarRoutesByRole(user.role);
+
   return (
-    <div className="min-h-screen flex bg-background">
-      <div className="hidden lg:block">
-        <Sidebar userRole={user.role} currentPath={currentPath} />
-      </div>
-      <div className="flex-1 flex flex-col">
-        <Topbar user={user} />
-        <main className="flex-1 p-6">{children}</main>
-      </div>
+    <div className="flex h-screen bg-muted/30">
+      <Sidebar 
+        routes={routes} 
+        currentPath={currentPath} 
+        isMobileMenuOpen={isMobileMenuOpen}
+        onMobileMenuClose={() => setIsMobileMenuOpen(false)}
+      />
+      <main className="flex-1 flex flex-col overflow-hidden">
+        <Topbar user={user} onMobileMenuOpen={() => setIsMobileMenuOpen(true)} />
+        <div className="flex-1 overflow-auto p-6 md:p-8 bg-muted/20">
+          {children}
+        </div>
+      </main>
     </div>
   );
 }

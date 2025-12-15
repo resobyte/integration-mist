@@ -2,8 +2,6 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Input } from '@/components/common/Input';
-import { Button } from '@/components/common/Button';
 import { useToast } from '@/components/common/ToastContext';
 import { apiPatch } from '@/lib/api';
 import { AuthUser } from '@/types';
@@ -22,6 +20,17 @@ export function AccountForm({ user }: AccountFormProps) {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isPending, startTransition] = useTransition();
+
+  const isProfileChanged = 
+    firstName !== user.firstName || 
+    lastName !== user.lastName || 
+    email !== user.email;
+
+  const isPasswordValid = 
+    currentPassword.length > 0 && 
+    newPassword.length >= 8 && 
+    confirmPassword.length > 0 &&
+    newPassword === confirmPassword;
 
   const handleProfileSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,75 +79,104 @@ export function AccountForm({ user }: AccountFormProps) {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+      <div className="bg-card rounded-xl border border-border shadow-sm p-6">
+        <h3 className="text-lg font-bold text-foreground mb-4">Profile Information</h3>
+        <form onSubmit={handleProfileSubmit} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">First Name</label>
+              <input
+                type="text"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                required
+                className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-muted/20"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">Last Name</label>
+              <input
+                type="text"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                required
+                className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-muted/20"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-1">Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-muted/20"
+            />
+          </div>
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={isPending || !isProfileChanged}
+              className="px-4 py-2 text-sm font-bold text-white bg-primary hover:bg-primary-dark rounded-lg transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isPending ? (
+                <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                'Update Profile'
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
 
-      <form onSubmit={handleProfileSubmit} className="space-y-4">
-        <h3 className="text-sm font-medium text-muted-foreground">Basic Information</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Input
-            label="First Name"
-            name="firstName"
-            value={firstName}
-            onChange={(e) => setFirstName(e.target.value)}
-            required
-          />
-          <Input
-            label="Last Name"
-            name="lastName"
-            value={lastName}
-            onChange={(e) => setLastName(e.target.value)}
-            required
-          />
-        </div>
-        <Input
-          label="Email"
-          type="email"
-          name="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-        />
-        <div className="flex justify-end">
-          <Button type="submit" isLoading={isPending}>
-            Update Profile
-          </Button>
-        </div>
-      </form>
-
-      <hr className="border-border" />
-
-      <form onSubmit={handlePasswordSubmit} className="space-y-4">
-        <h3 className="text-sm font-medium text-muted-foreground">Change Password</h3>
-        <Input
-          label="Current Password"
-          type="password"
-          name="currentPassword"
-          value={currentPassword}
-          onChange={(e) => setCurrentPassword(e.target.value)}
-          required
-        />
-        <Input
-          label="New Password"
-          type="password"
-          name="newPassword"
-          value={newPassword}
-          onChange={(e) => setNewPassword(e.target.value)}
-          required
-        />
-        <Input
-          label="Confirm New Password"
-          type="password"
-          name="confirmPassword"
-          value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)}
-          required
-        />
-        <div className="flex justify-end">
-          <Button type="submit" isLoading={isPending}>
-            Update Password
-          </Button>
-        </div>
-      </form>
+      <div className="bg-card rounded-xl border border-border shadow-sm p-6">
+        <h3 className="text-lg font-bold text-foreground mb-4">Change Password</h3>
+        <form onSubmit={handlePasswordSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-1">Current Password</label>
+            <input
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-muted/20"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-1">New Password</label>
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="Minimum 8 characters"
+              className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-muted/20"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-1">Confirm New Password</label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-muted/20"
+            />
+          </div>
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={isPending || !isPasswordValid}
+              className="px-4 py-2 text-sm font-bold text-white bg-primary hover:bg-primary-dark rounded-lg transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isPending ? (
+                <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                'Update Password'
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

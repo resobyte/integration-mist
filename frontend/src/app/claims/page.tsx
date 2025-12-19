@@ -1,23 +1,11 @@
-import { getServerUser } from '@/lib/auth';
-import { redirect } from 'next/navigation';
-import { Role } from '@/types';
-import { AppLayout } from '@/components/layouts/AppLayout';
 import { ClaimsTable } from './ClaimsTable';
+import { ProtectedPage } from '@/components/auth/ProtectedPage';
+import { Role } from '@/types';
 
-export default async function ClaimsPage() {
-  const user = await getServerUser();
-
-  if (!user) {
-    redirect('/auth/login');
-  }
-
-  if (![Role.PLATFORM_OWNER, Role.OPERATION].includes(user.role)) {
-    redirect('/403');
-  }
-
+export default function ClaimsPage() {
   return (
-    <AppLayout user={user} currentPath="/claims">
+    <ProtectedPage currentPath="/claims" allowedRoles={[Role.PLATFORM_OWNER, Role.OPERATION]}>
       <ClaimsTable />
-    </AppLayout>
+    </ProtectedPage>
   );
 }

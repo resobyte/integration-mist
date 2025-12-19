@@ -12,6 +12,7 @@ import {
 import { Response, Request } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { JwtRefreshGuard } from './guards/jwt-refresh.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -23,50 +24,32 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  async login(
-    @Body() loginDto: LoginDto,
-    @Res({ passthrough: true }) response: Response,
-  ) {
+  async login(@Body() loginDto: LoginDto) {
     const { user, tokens } = await this.authService.login(loginDto);
 
-    response.cookie(
-      'access_token',
-      tokens.accessToken,
-      this.authService.getCookieOptions(false),
-    );
-    response.cookie(
-      'refresh_token',
-      tokens.refreshToken,
-      this.authService.getCookieOptions(true),
-    );
-
-    return { user };
+    return {
+      user,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+    };
   }
 
   @Post('refresh')
   @UseGuards(JwtRefreshGuard)
   @HttpCode(HttpStatus.OK)
   async refresh(
+    @Body() refreshTokenDto: RefreshTokenDto,
     @CurrentUser() user: JwtPayload & { refreshToken: string },
-    @Res({ passthrough: true }) response: Response,
   ) {
     const { tokens } = await this.authService.refreshTokens(
       user.sub,
-      user.refreshToken,
+      refreshTokenDto.refreshToken,
     );
 
-    response.cookie(
-      'access_token',
-      tokens.accessToken,
-      this.authService.getCookieOptions(false),
-    );
-    response.cookie(
-      'refresh_token',
-      tokens.refreshToken,
-      this.authService.getCookieOptions(true),
-    );
-
-    return { message: 'Tokens refreshed' };
+    return {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+    };
   }
 
   @Post('logout')
@@ -75,27 +58,10 @@ export class AuthController {
   async logout(
     @CurrentUser('sub') userId: string,
     @Req() request: Request,
-    @Res({ passthrough: true }) response: Response,
   ) {
-    const accessToken = request.cookies?.access_token;
-    await this.authService.logout(userId, accessToken);
-
-    const cookieOptions = this.authService.getCookieOptions(false);
-    response.clearCookie('access_token', {
-      path: cookieOptions.path,
-      secure: cookieOptions.secure,
-      sameSite: cookieOptions.sameSite,
-      httpOnly: cookieOptions.httpOnly,
-      domain: cookieOptions.domain,
-    });
-    const refreshCookieOptions = this.authService.getCookieOptions(true);
-    response.clearCookie('refresh_token', {
-      path: refreshCookieOptions.path,
-      secure: refreshCookieOptions.secure,
-      sameSite: refreshCookieOptions.sameSite,
-      httpOnly: refreshCookieOptions.httpOnly,
-      domain: refreshCookieOptions.domain,
-    });
+    const authHeader = request.headers.authorization;
+    const accessToken = authHeader?.replace('Bearer ', '');
+    await this.authService.logout(userId, accessToken || '');
 
     return { message: 'Logged out successfully' };
   }

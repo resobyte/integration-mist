@@ -1,11 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { getDefaultRouteByRole } from '@/config/routes';
+import { API_URL } from '@/config/api';
+import { setTokens } from '@/lib/token';
 
 export function LoginForm() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const callbackUrl = searchParams.get('callbackUrl');
 
   const [email, setEmail] = useState('');
@@ -22,27 +25,46 @@ export function LoginForm() {
     setIsPending(true);
 
     try {
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ email, password }),
-        credentials: 'include',
       });
 
-      const result = await response.json();
+      const data = await response.json();
+      console.log('Login response:', data);
       
-      if (!result.success) {
-        setError(result.error || 'Giriş başarısız');
+      if (!response.ok) {
+        setError(data.message || 'Giriş başarısız');
         setIsPending(false);
         return;
       }
 
-      if (result.user) {
-        const redirectUrl = callbackUrl || getDefaultRouteByRole(result.user.role);
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        window.location.href = redirectUrl;
+      const user = data.user || data.data?.user;
+      const accessToken = data.accessToken || data.data?.accessToken;
+      const refreshToken = data.refreshToken || data.data?.refreshToken;
+
+      if (user && accessToken && refreshToken) {
+        console.log('Setting tokens:', { accessToken: accessToken.substring(0, 20) + '...', refreshToken: refreshToken.substring(0, 20) + '...' });
+        setTokens(accessToken, refreshToken);
+        
+        const savedAccessToken = localStorage.getItem('access_token');
+        const savedRefreshToken = localStorage.getItem('refresh_token');
+        console.log('Tokens saved:', { 
+          accessToken: savedAccessToken ? savedAccessToken.substring(0, 20) + '...' : 'null',
+          refreshToken: savedRefreshToken ? savedRefreshToken.substring(0, 20) + '...' : 'null'
+        });
+        
+        const redirectUrl = callbackUrl || getDefaultRouteByRole(user.role);
+        setTimeout(() => {
+          window.location.href = redirectUrl;
+        }, 100);
+      } else {
+        console.error('Missing tokens or user:', { user, hasAccessToken: !!accessToken, hasRefreshToken: !!refreshToken, fullData: data });
+        setError('Token alınamadı. Lütfen tekrar deneyin.');
+        setIsPending(false);
       }
     } catch (error) {
       console.error('Login error:', error);

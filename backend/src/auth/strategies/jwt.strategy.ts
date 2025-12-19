@@ -17,11 +17,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       throw new Error('JWT_ACCESS_SECRET is not configured');
     }
     super({
-      jwtFromRequest: ExtractJwt.fromExtractors([
-        (request: Request) => {
-          return request?.cookies?.access_token;
-        },
-      ]),
+      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
       secretOrKey: secret,
       passReqToCallback: true,
@@ -29,16 +25,10 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   }
 
   async validate(request: Request, payload: JwtPayload): Promise<JwtPayload> {
-    const token = request.cookies?.access_token;
+    const authHeader = request.headers.authorization;
+    const token = authHeader?.replace('Bearer ', '');
 
     if (!token) {
-      const isProduction = process.env.NODE_ENV === 'production';
-      if (!isProduction) {
-        const cookieHeader = request.headers.cookie;
-        throw new UnauthorizedException(
-          `Token not found. Cookies: ${cookieHeader || 'none'}`,
-        );
-      }
       throw new UnauthorizedException('Token not found');
     }
 

@@ -18,7 +18,8 @@ export class JwtRefreshStrategy extends PassportStrategy(
     super({
       jwtFromRequest: ExtractJwt.fromExtractors([
         (request: Request) => {
-          return request?.cookies?.refresh_token;
+          const body = request.body as { refreshToken?: string };
+          return body?.refreshToken || null;
         },
       ]),
       ignoreExpiration: false,
@@ -31,7 +32,8 @@ export class JwtRefreshStrategy extends PassportStrategy(
     request: Request,
     payload: JwtPayload,
   ): JwtPayload & { refreshToken: string } {
-    const refreshToken = request.cookies?.refresh_token;
+    const body = request.body as { refreshToken?: string };
+    const refreshToken = body?.refreshToken;
 
     if (!refreshToken) {
       throw new UnauthorizedException('Refresh token not found');

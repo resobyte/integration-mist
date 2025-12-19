@@ -1,15 +1,22 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { AuthUser } from '@/types';
+import { useRouter, usePathname } from 'next/navigation';
+import { AuthUser, Role } from '@/types';
 import { getAccessToken } from '@/lib/token';
 import { API_URL } from '@/config/api';
 import { AppLayout } from '@/components/layouts/AppLayout';
-import { AccountForm } from './AccountForm';
+import { isRouteAllowed } from '@/config/routes';
 
-export default function AccountPage() {
+interface ProtectedPageProps {
+  children: React.ReactNode;
+  currentPath: string;
+  allowedRoles?: Role[];
+}
+
+export function ProtectedPage({ children, currentPath, allowedRoles }: ProtectedPageProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -44,6 +51,16 @@ export default function AccountPage() {
           return;
         }
 
+        if (allowedRoles && !allowedRoles.includes(userData.role)) {
+          router.push('/403');
+          return;
+        }
+
+        if (!isRouteAllowed(pathname, userData.role)) {
+          router.push('/403');
+          return;
+        }
+
         setUser(userData);
       } catch (error) {
         console.error('Auth check error:', error);
@@ -54,7 +71,7 @@ export default function AccountPage() {
     };
 
     checkAuth();
-  }, [router]);
+  }, [router, pathname, allowedRoles]);
 
   if (isLoading) {
     return (
@@ -69,15 +86,9 @@ export default function AccountPage() {
   }
 
   return (
-    <AppLayout user={user} currentPath="/account">
-      <div className="max-w-2xl mx-auto space-y-6">
-        <div>
-          <h2 className="text-3xl font-bold text-foreground font-rubik">Hesap Ayarları</h2>
-          <p className="text-muted-foreground mt-1">Profil ve güvenlik ayarlarınızı yönetin.</p>
-        </div>
-
-        <AccountForm user={user} />
-      </div>
+    <AppLayout user={user} currentPath={currentPath}>
+      {children}
     </AppLayout>
   );
 }
+

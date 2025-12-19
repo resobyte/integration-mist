@@ -1,23 +1,11 @@
-import { redirect } from 'next/navigation';
-import { getServerUser } from '@/lib/auth';
-import { AppLayout } from '@/components/layouts/AppLayout';
-import { Role } from '@/types';
 import { UsersTable } from './UsersTable';
+import { ProtectedPage } from '@/components/auth/ProtectedPage';
+import { Role } from '@/types';
 
-export default async function UsersPage() {
-  const user = await getServerUser();
-
-  if (!user) {
-    redirect('/auth/login');
-  }
-
-  if (user.role !== Role.PLATFORM_OWNER) {
-    redirect('/403');
-  }
-
+export default function UsersPage() {
   return (
-    <AppLayout user={user} currentPath="/users">
+    <ProtectedPage currentPath="/users" allowedRoles={[Role.PLATFORM_OWNER]}>
       <UsersTable />
-    </AppLayout>
+    </ProtectedPage>
   );
 }

@@ -1,24 +1,12 @@
-import { redirect } from 'next/navigation';
-import { getServerUser } from '@/lib/auth';
-import { AppLayout } from '@/components/layouts/AppLayout';
-import { Role } from '@/types';
 import { StoresTable } from './StoresTable';
+import { ProtectedPage } from '@/components/auth/ProtectedPage';
+import { Role } from '@/types';
 
-export default async function StoresPage() {
-  const user = await getServerUser();
-
-  if (!user) {
-    redirect('/auth/login');
-  }
-
-  if (user.role !== Role.PLATFORM_OWNER) {
-    redirect('/403');
-  }
-
+export default function StoresPage() {
   return (
-    <AppLayout user={user} currentPath="/stores">
+    <ProtectedPage currentPath="/stores" allowedRoles={[Role.PLATFORM_OWNER]}>
       <StoresTable />
-    </AppLayout>
+    </ProtectedPage>
   );
 }
 

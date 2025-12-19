@@ -1,24 +1,12 @@
-import { getServerUser } from '@/lib/auth';
-import { redirect } from 'next/navigation';
-import { Role } from '@/types';
-import { AppLayout } from '@/components/layouts/AppLayout';
 import { QuestionsTable } from './QuestionsTable';
+import { ProtectedPage } from '@/components/auth/ProtectedPage';
+import { Role } from '@/types';
 
-export default async function QuestionsPage() {
-  const user = await getServerUser();
-
-  if (!user) {
-    redirect('/auth/login');
-  }
-
-  if (![Role.PLATFORM_OWNER, Role.OPERATION].includes(user.role)) {
-    redirect('/403');
-  }
-
+export default function QuestionsPage() {
   return (
-    <AppLayout user={user} currentPath="/questions">
+    <ProtectedPage currentPath="/questions" allowedRoles={[Role.PLATFORM_OWNER, Role.OPERATION]}>
       <QuestionsTable />
-    </AppLayout>
+    </ProtectedPage>
   );
 }
 

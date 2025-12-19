@@ -1,22 +1,10 @@
-import { redirect } from 'next/navigation';
-import { getServerUser } from '@/lib/auth';
-import { AppLayout } from '@/components/layouts/AppLayout';
 import { DashboardStats } from './DashboardStats';
+import { ProtectedPage } from '@/components/auth/ProtectedPage';
 import { Role } from '@/types';
 
-export default async function DashboardPage() {
-  const user = await getServerUser();
-
-  if (!user) {
-    redirect('/auth/login');
-  }
-
-  if (user.role !== Role.PLATFORM_OWNER) {
-    redirect('/403');
-  }
-
+export default function DashboardPage() {
   return (
-    <AppLayout user={user} currentPath="/dashboard">
+    <ProtectedPage currentPath="/dashboard" allowedRoles={[Role.PLATFORM_OWNER]}>
       <div className="space-y-6">
         <div>
           <h2 className="text-3xl font-bold text-foreground font-rubik">Kontrol Paneli</h2>
@@ -25,6 +13,6 @@ export default async function DashboardPage() {
 
         <DashboardStats />
       </div>
-    </AppLayout>
+    </ProtectedPage>
   );
 }

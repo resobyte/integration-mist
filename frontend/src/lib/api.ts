@@ -1,5 +1,7 @@
 import { ApiResponse, ErrorResponse, PaginationResponse } from '@/types';
 import { API_URL } from '@/config/api';
+import { getAccessToken } from './token';
+import { refreshAccessToken } from './auth-client';
 
 interface FetchOptions extends RequestInit {
   params?: Record<string, string | number | string[] | number[] | undefined>;
@@ -17,10 +19,31 @@ class ApiError extends Error {
   }
 }
 
-async function handleResponse<T>(response: Response): Promise<T> {
+async function handleResponse<T>(
+  response: Response,
+  originalRequest?: { url: string; options?: RequestInit },
+  retry = true
+): Promise<T> {
   const data = await response.json();
 
   if (!response.ok) {
+    if (response.status === 401 && retry && typeof window !== 'undefined' && originalRequest) {
+      const refreshed = await refreshAccessToken();
+      if (refreshed) {
+        const token = getAccessToken();
+        if (token) {
+          const retryResponse = await fetch(originalRequest.url, {
+            ...originalRequest.options,
+            headers: {
+              ...originalRequest.options?.headers,
+              Authorization: `Bearer ${token}`,
+            },
+          });
+          return handleResponse<T>(retryResponse, originalRequest, false);
+        }
+      }
+    }
+    
     const errorData = data as ErrorResponse;
     throw new ApiError(
       errorData.message || 'An error occurred',
@@ -52,6 +75,19 @@ function buildUrl(endpoint: string, params?: Record<string, string | number | st
   return url.toString();
 }
 
+function getAuthHeaders(): Record<string, string> {
+  const token = getAccessToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  return headers;
+}
+
 export async function apiGet<T>(
   endpoint: string,
   options?: FetchOptions
@@ -59,17 +95,18 @@ export async function apiGet<T>(
   const { params, ...fetchOptions } = options || {};
   const url = buildUrl(endpoint, params);
 
-  const response = await fetch(url, {
+  const requestOptions = {
     method: 'GET',
-    credentials: 'include',
     headers: {
-      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
       ...fetchOptions?.headers,
     },
     ...fetchOptions,
-  });
+  };
 
-  return handleResponse<ApiResponse<T>>(response);
+  const response = await fetch(url, requestOptions);
+
+  return handleResponse<ApiResponse<T>>(response, { url, options: requestOptions });
 }
 
 export async function apiGetPaginated<T>(
@@ -79,17 +116,18 @@ export async function apiGetPaginated<T>(
   const { params, ...fetchOptions } = options || {};
   const url = buildUrl(endpoint, params);
 
-  const response = await fetch(url, {
+  const requestOptions = {
     method: 'GET',
-    credentials: 'include',
     headers: {
-      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
       ...fetchOptions?.headers,
     },
     ...fetchOptions,
-  });
+  };
 
-  return handleResponse<PaginationResponse<T>>(response);
+  const response = await fetch(url, requestOptions);
+
+  return handleResponse<PaginationResponse<T>>(response, { url, options: requestOptions });
 }
 
 export async function apiPost<T, D = unknown>(
@@ -100,18 +138,19 @@ export async function apiPost<T, D = unknown>(
   const { params, ...fetchOptions } = options || {};
   const url = buildUrl(endpoint, params);
 
-  const response = await fetch(url, {
+  const requestOptions = {
     method: 'POST',
-    credentials: 'include',
     headers: {
-      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
       ...fetchOptions?.headers,
     },
     body: data ? JSON.stringify(data) : undefined,
     ...fetchOptions,
-  });
+  };
 
-  return handleResponse<ApiResponse<T>>(response);
+  const response = await fetch(url, requestOptions);
+
+  return handleResponse<ApiResponse<T>>(response, { url, options: requestOptions });
 }
 
 export async function apiPatch<T, D = unknown>(
@@ -122,18 +161,19 @@ export async function apiPatch<T, D = unknown>(
   const { params, ...fetchOptions } = options || {};
   const url = buildUrl(endpoint, params);
 
-  const response = await fetch(url, {
+  const requestOptions = {
     method: 'PATCH',
-    credentials: 'include',
     headers: {
-      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
       ...fetchOptions?.headers,
     },
     body: data ? JSON.stringify(data) : undefined,
     ...fetchOptions,
-  });
+  };
 
-  return handleResponse<ApiResponse<T>>(response);
+  const response = await fetch(url, requestOptions);
+
+  return handleResponse<ApiResponse<T>>(response, { url, options: requestOptions });
 }
 
 export async function apiDelete<T>(
@@ -143,17 +183,18 @@ export async function apiDelete<T>(
   const { params, ...fetchOptions } = options || {};
   const url = buildUrl(endpoint, params);
 
-  const response = await fetch(url, {
+  const requestOptions = {
     method: 'DELETE',
-    credentials: 'include',
     headers: {
-      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
       ...fetchOptions?.headers,
     },
     ...fetchOptions,
-  });
+  };
 
-  return handleResponse<ApiResponse<T>>(response);
+  const response = await fetch(url, requestOptions);
+
+  return handleResponse<ApiResponse<T>>(response, { url, options: requestOptions });
 }
 
 export { ApiError };

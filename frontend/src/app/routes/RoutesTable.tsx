@@ -308,6 +308,37 @@ export function RoutesTable() {
     return colors[status] || 'bg-muted text-muted-foreground border-border';
   };
 
+  const handleAutoCreateRoute = async () => {
+    if (pendingOrdersCount === 0) {
+      showDanger('Bekleyen sipariş bulunmuyor');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const response = await apiGet<any[]>('/routes/filter-orders', { params: { status: 'PENDING' } });
+      if (response.data && response.data.length > 0) {
+        const orderIds = response.data.map((o) => o.id);
+        await apiPost('/routes', {
+          name: `Otomatik Rota - ${new Date().toLocaleDateString('tr-TR')}`,
+          description: `${response.data.length} bekleyen sipariş için otomatik oluşturuldu`,
+          orderIds,
+        });
+        showSuccess(`${response.data.length} sipariş için rota başarıyla oluşturuldu`);
+        fetchRoutes();
+        fetchSuggestions();
+        fetchPendingOrdersCount();
+      } else {
+        showDanger('Rota oluşturulacak sipariş bulunamadı');
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Rota oluşturulurken hata oluştu';
+      showDanger(errorMessage);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -315,15 +346,71 @@ export function RoutesTable() {
           <h2 className="text-3xl font-bold text-foreground font-rubik">Rotalar</h2>
           <p className="text-muted-foreground mt-1">Sipariş rotalarını oluşturun ve yönetin.</p>
         </div>
-        <button
-          onClick={() => setIsFilterModalOpen(true)}
-          className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg flex items-center shadow-md transition-all active:scale-95"
-        >
-          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Rota Oluştur
-        </button>
+        <div className="flex gap-2">
+          {pendingOrdersCount > 0 && (
+            <button
+              onClick={handleAutoCreateRoute}
+              disabled={isSubmitting}
+              className="bg-success hover:bg-success-dark text-white px-4 py-2 rounded-lg flex items-center shadow-md transition-all active:scale-95 disabled:opacity-50"
+            >
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              Bekleyen Siparişlerden Rota Oluştur ({pendingOrdersCount})
+            </button>
+          )}
+          <button
+            onClick={() => setIsFilterModalOpen(true)}
+            className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg flex items-center shadow-md transition-all active:scale-95"
+          >
+            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Rota Oluştur
+          </button>
+        </div>
+      </div>
+
+      <div className="flex gap-2 items-center">
+        <span className="text-sm font-medium text-foreground">Durum Filtresi:</span>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={statusFilter.includes(RouteStatus.COLLECTING) || statusFilter.includes(RouteStatus.READY)}
+            onChange={(e) => {
+              if (e.target.checked) {
+                setStatusFilter([RouteStatus.COLLECTING, RouteStatus.READY]);
+              } else {
+                setStatusFilter(statusFilter.filter((s) => s !== RouteStatus.COLLECTING && s !== RouteStatus.READY));
+              }
+            }}
+            className="rounded border-input"
+          />
+          <span className="text-sm text-foreground">Toplamada Olanlar</span>
+        </label>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={statusFilter.includes(RouteStatus.COMPLETED)}
+            onChange={(e) => {
+              if (e.target.checked) {
+                setStatusFilter([...statusFilter, RouteStatus.COMPLETED]);
+              } else {
+                setStatusFilter(statusFilter.filter((s) => s !== RouteStatus.COMPLETED));
+              }
+            }}
+            className="rounded border-input"
+          />
+          <span className="text-sm text-foreground">Tamamlananlar</span>
+        </label>
+        {statusFilter.length > 0 && (
+          <button
+            onClick={() => setStatusFilter([])}
+            className="text-xs text-muted-foreground hover:text-foreground underline"
+          >
+            Filtreyi Temizle
+          </button>
+        )}
       </div>
 
       <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">

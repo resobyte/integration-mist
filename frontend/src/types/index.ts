@@ -14,18 +14,97 @@ export interface User {
   updatedAt: string;
 }
 
-export interface AuthUser {
+export interface Store {
   id: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  role: Role;
+  name: string;
+  sellerId: string | null;
+  apiKey: string | null;
+  apiSecret: string | null;
+  token: string | null;
+  description: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export interface ApiResponse<T> {
-  success: boolean;
-  data: T;
-  message?: string;
+export interface Product {
+  id: string;
+  storeId: string;
+  store?: Store;
+  name: string;
+  barcode: string | null;
+  stock: number;
+  purchasePrice: number | null;
+  salePrice: number | null;
+  taxRate: number;
+  description: string | null;
+  sku: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export enum OrderStatus {
+  PENDING = 'PENDING',
+  PROCESSING = 'PROCESSING',
+  COLLECTING = 'COLLECTING',
+  PACKED = 'PACKED',
+  SHIPPED = 'SHIPPED',
+  DELIVERED = 'DELIVERED',
+  CANCELLED = 'CANCELLED',
+  RETURNED = 'RETURNED',
+}
+
+export interface Order {
+  id: string;
+  storeId: string;
+  store?: Store;
+  orderNumber: string;
+  shipmentPackageId: number;
+  trendyolStatus: string;
+  status: OrderStatus;
+  customerFirstName: string | null;
+  customerLastName: string | null;
+  customerEmail: string | null;
+  orderDate: number;
+  grossAmount: number;
+  totalPrice: number;
+  currencyCode: string;
+  cargoTrackingNumber: string | null;
+  cargoProviderName: string | null;
+  cargoTrackingLink: string | null;
+  commercial: boolean;
+  micro: boolean;
+  deliveryAddressType: string | null;
+  lines?: Array<{
+    productId?: string;
+    barcode?: string;
+    quantity?: number;
+    productName?: string;
+    name?: string;
+    productBarcode?: string;
+    [key: string]: unknown;
+  }> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export enum RouteStatus {
+  COLLECTING = 'COLLECTING',
+  READY = 'READY',
+  COMPLETED = 'COMPLETED',
+}
+
+export interface Route {
+  id: string;
+  name: string;
+  description: string | null;
+  status: RouteStatus;
+  orders: Order[];
+  orderCount: number;
+  labelPrintedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface PaginationMeta {
@@ -35,25 +114,11 @@ export interface PaginationMeta {
   totalPages: number;
 }
 
-export interface PaginationResponse<T> {
-  success: boolean;
-  data: T[];
-  meta: PaginationMeta;
-}
-
-export interface ErrorResponse {
-  success: false;
-  message: string;
-  error?: string;
-  statusCode: number;
-}
-
-export interface RouteConfig {
-  path: string;
-  label: string;
-  icon?: string;
-  roles: Role[];
-  showInSidebar: boolean;
+export interface PaginationParams {
+  page: number;
+  limit: number;
+  sortBy?: string;
+  sortOrder?: 'ASC' | 'DESC';
 }
 
 export interface SortConfig {
@@ -61,9 +126,10 @@ export interface SortConfig {
   sortOrder: 'ASC' | 'DESC';
 }
 
-export interface PaginationParams {
-  page: number;
-  limit: number;
-  sortBy?: string;
-  sortOrder?: 'ASC' | 'DESC';
+export interface RouteConfig {
+  path: string;
+  label: string;
+  icon: string;
+  roles: Role[];
+  showInSidebar: boolean;
 }

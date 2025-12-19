@@ -1,9 +1,15 @@
-import { Module } from '@nestjs/common';
+import { Module, OnModuleInit } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { CommonModule } from './common/common.module';
+import { StoresModule } from './stores/stores.module';
+import { ProductsModule } from './products/products.module';
+import { OrdersModule } from './orders/orders.module';
+import { RoutesModule } from './routes/routes.module';
+import { SeedService } from './database/seed.service';
+import { User } from './users/entities/user.entity';
 
 @Module({
   imports: [
@@ -26,9 +32,21 @@ import { CommonModule } from './common/common.module';
       }),
       inject: [ConfigService],
     }),
+    TypeOrmModule.forFeature([User]),
     CommonModule,
     AuthModule,
     UsersModule,
+    StoresModule,
+    ProductsModule,
+    OrdersModule,
+    RoutesModule,
   ],
+  providers: [SeedService],
 })
-export class AppModule {}
+export class AppModule implements OnModuleInit {
+  constructor(private readonly seedService: SeedService) {}
+
+  async onModuleInit() {
+    await this.seedService.seed();
+  }
+}

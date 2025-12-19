@@ -64,6 +64,28 @@ export function UsersTable() {
     fetchUsers();
   }, [fetchUsers]);
 
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isModalOpen) {
+        setIsModalOpen(false);
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [isModalOpen]);
+
+  const isFormValid = () => {
+    const baseValid = formData.firstName.trim() !== '' && 
+                     formData.lastName.trim() !== '' && 
+                     formData.email.trim() !== '';
+    
+    if (editingUser) {
+      return baseValid;
+    } else {
+      return baseValid && formData.password.trim() !== '';
+    }
+  };
+
   const handleSort = (key: string) => {
     setSortConfig((prev) => ({
       sortBy: key,
@@ -104,10 +126,10 @@ export function UsersTable() {
           delete updateData.password;
         }
         await apiPatch(`/users/${editingUser.id}`, updateData);
-        showSuccess('User updated successfully');
+        showSuccess('Kullanıcı başarıyla güncellendi');
       } else {
         await apiPost('/users', formData);
-        showSuccess('User created successfully');
+        showSuccess('Kullanıcı başarıyla oluşturuldu');
       }
       setIsModalOpen(false);
       fetchUsers();
@@ -121,16 +143,16 @@ export function UsersTable() {
   };
 
   const handleDelete = async (user: User) => {
-    if (!confirm(`Are you sure you want to delete ${user.firstName} ${user.lastName}?`)) {
+    if (!confirm(`${user.firstName} ${user.lastName} kullanıcısını silmek istediğinizden emin misiniz?`)) {
       return;
     }
 
     try {
       await apiDelete(`/users/${user.id}`);
-      showSuccess('User deleted successfully');
+      showSuccess('Kullanıcı başarıyla silindi');
       fetchUsers();
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to delete user';
+      const errorMessage = error instanceof Error ? error.message : 'Kullanıcı silinirken hata oluştu';
       showDanger(errorMessage);
     }
   };
@@ -147,18 +169,18 @@ export function UsersTable() {
   });
 
   const columns = [
-    { key: 'firstName', label: 'User' },
-    { key: 'role', label: 'Role' },
-    { key: 'isActive', label: 'Status' },
-    { key: 'createdAt', label: 'Last Login' },
+    { key: 'firstName', label: 'Kullanıcı' },
+    { key: 'role', label: 'Rol' },
+    { key: 'isActive', label: 'Durum' },
+    { key: 'createdAt', label: 'Son Giriş' },
   ];
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-3xl font-bold text-foreground font-rubik">Users</h2>
-          <p className="text-muted-foreground mt-1">Manage user access and permissions.</p>
+          <h2 className="text-3xl font-bold text-foreground font-rubik">Kullanıcılar</h2>
+          <p className="text-muted-foreground mt-1">Kullanıcı erişimlerini ve izinlerini yönetin.</p>
         </div>
         <button
           onClick={openCreateModal}
@@ -167,7 +189,7 @@ export function UsersTable() {
           <svg className="w-[18px] h-[18px] mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
-          Add User
+          Kullanıcı Ekle
         </button>
       </div>
 
@@ -181,7 +203,7 @@ export function UsersTable() {
             </div>
             <input
               type="text"
-              placeholder="Search users..."
+              placeholder="Kullanıcı ara..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="block w-full pl-10 pr-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-all outline-none bg-muted/20 text-sm"
@@ -215,7 +237,7 @@ export function UsersTable() {
                     </div>
                   </th>
                 ))}
-                <th className="px-6 py-3 text-right">Actions</th>
+                <th className="px-6 py-3 text-right">İşlemler</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -250,7 +272,7 @@ export function UsersTable() {
                           ? 'bg-success/10 text-success border-success/20'
                           : 'bg-muted text-muted-foreground border-border'
                       }`}>
-                        {user.isActive ? 'Active' : 'Inactive'}
+                        {user.isActive ? 'Aktif' : 'Pasif'}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
@@ -281,7 +303,7 @@ export function UsersTable() {
               ) : (
                 <tr>
                   <td colSpan={5} className="px-6 py-8 text-center text-muted-foreground">
-                    No users found matching your search.
+                    Arama kriterlerinize uygun kullanıcı bulunamadı.
                   </td>
                 </tr>
               )}
@@ -292,9 +314,9 @@ export function UsersTable() {
         {pagination && pagination.totalPages > 1 && (
           <div className="flex items-center justify-between px-6 py-4 border-t border-border bg-muted/10">
             <div className="text-sm text-muted-foreground">
-              Showing {((pagination.page - 1) * pagination.limit) + 1} to{' '}
-              {Math.min(pagination.page * pagination.limit, pagination.total)} of{' '}
-              {pagination.total} results
+              {((pagination.page - 1) * pagination.limit) + 1} -{' '}
+              {Math.min(pagination.page * pagination.limit, pagination.total)} /{' '}
+              {pagination.total} sonuç gösteriliyor
             </div>
             <div className="flex gap-2">
               <button
@@ -302,14 +324,14 @@ export function UsersTable() {
                 disabled={pagination.page <= 1}
                 className="px-4 py-2 text-sm font-medium border border-input rounded-lg hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                Previous
+                Önceki
               </button>
               <button
                 onClick={() => setCurrentPage(p => p + 1)}
                 disabled={pagination.page >= pagination.totalPages}
                 className="px-4 py-2 text-sm font-medium border border-input rounded-lg hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                Next
+                Sonraki
               </button>
             </div>
           </div>
@@ -317,11 +339,18 @@ export function UsersTable() {
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-card w-full max-w-md rounded-xl shadow-2xl border border-border">
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsModalOpen(false);
+            }
+          }}
+        >
+          <div className="bg-card w-full max-w-md rounded-xl shadow-2xl border border-border my-8">
             <div className="flex justify-between items-center p-6 border-b border-border">
               <h3 className="text-xl font-bold text-foreground">
-                {editingUser ? 'Edit User' : 'Add New User'}
+                {editingUser ? 'Kullanıcı Düzenle' : 'Yeni Kullanıcı Ekle'}
               </h3>
               <button onClick={() => setIsModalOpen(false)} className="text-muted-foreground hover:text-foreground">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -329,9 +358,9 @@ export function UsersTable() {
                 </svg>
               </button>
             </div>
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1">Full Name</label>
+                <label className="block text-sm font-medium text-foreground mb-1">Ad</label>
                 <input
                   type="text"
                   required
@@ -341,7 +370,7 @@ export function UsersTable() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1">Last Name</label>
+                <label className="block text-sm font-medium text-foreground mb-1">Soyad</label>
                 <input
                   type="text"
                   required
@@ -351,7 +380,7 @@ export function UsersTable() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1">Email</label>
+                <label className="block text-sm font-medium text-foreground mb-1">E-posta</label>
                 <input
                   type="email"
                   required
@@ -362,7 +391,7 @@ export function UsersTable() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">
-                  {editingUser ? 'Password (leave empty to keep current)' : 'Password'}
+                  {editingUser ? 'Şifre (değiştirmek istemiyorsanız boş bırakın)' : 'Şifre'}
                 </label>
                 <input
                   type="password"
@@ -374,25 +403,25 @@ export function UsersTable() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">Role</label>
+                  <label className="block text-sm font-medium text-foreground mb-1">Rol</label>
                   <select
                     value={formData.role}
                     onChange={(e) => setFormData({ ...formData, role: e.target.value as Role })}
                     className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-muted/20"
                   >
-                    <option value={Role.PLATFORM_OWNER}>Platform Owner</option>
-                    <option value={Role.OPERATION}>Operation</option>
+                    <option value={Role.PLATFORM_OWNER}>Platform Sahibi</option>
+                    <option value={Role.OPERATION}>Operasyon</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">Status</label>
+                  <label className="block text-sm font-medium text-foreground mb-1">Durum</label>
                   <select
-                    value={formData.isActive ? 'Active' : 'Inactive'}
-                    onChange={(e) => setFormData({ ...formData, isActive: e.target.value === 'Active' })}
+                    value={formData.isActive ? 'Aktif' : 'Pasif'}
+                    onChange={(e) => setFormData({ ...formData, isActive: e.target.value === 'Aktif' })}
                     className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-muted/20"
                   >
-                    <option value="Active">Active</option>
-                    <option value="Inactive">Inactive</option>
+                    <option value="Aktif">Aktif</option>
+                    <option value="Pasif">Pasif</option>
                   </select>
                 </div>
               </div>
@@ -407,17 +436,17 @@ export function UsersTable() {
                   onClick={() => setIsModalOpen(false)}
                   className="px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted rounded-lg transition-colors"
                 >
-                  Cancel
+                  İptal
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting}
-                  className="px-4 py-2 text-sm font-bold text-white bg-primary hover:bg-primary-dark rounded-lg transition-colors shadow-sm disabled:opacity-50"
+                  disabled={isSubmitting || !isFormValid()}
+                  className="px-4 py-2 text-sm font-bold text-white bg-primary hover:bg-primary-dark rounded-lg transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSubmitting ? (
                     <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   ) : (
-                    'Save Changes'
+                    'Değişiklikleri Kaydet'
                   )}
                 </button>
               </div>

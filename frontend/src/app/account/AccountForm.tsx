@@ -42,10 +42,10 @@ export function AccountForm({ user }: AccountFormProps) {
           lastName,
           email,
         });
-        showSuccess('Profile updated successfully');
+        showSuccess('Profil başarıyla güncellendi');
         router.refresh();
       } catch (error) {
-        showDanger(error instanceof Error ? error.message : 'Failed to update profile');
+        showDanger(error instanceof Error ? error.message : 'Profil güncellenirken hata oluştu');
       }
     });
   };
@@ -54,12 +54,12 @@ export function AccountForm({ user }: AccountFormProps) {
     e.preventDefault();
 
     if (newPassword !== confirmPassword) {
-      showDanger('Passwords do not match');
+      showDanger('Şifreler eşleşmiyor');
       return;
     }
 
     if (newPassword.length < 8) {
-      showDanger('Password must be at least 8 characters');
+      showDanger('Şifre en az 8 karakter olmalıdır');
       return;
     }
 
@@ -68,12 +68,12 @@ export function AccountForm({ user }: AccountFormProps) {
         await apiPatch(`/users/${user.id}`, {
           password: newPassword,
         });
-        showSuccess('Password updated successfully');
+        showSuccess('Şifre başarıyla güncellendi');
         setCurrentPassword('');
         setNewPassword('');
         setConfirmPassword('');
       } catch (error) {
-        showDanger(error instanceof Error ? error.message : 'Failed to update password');
+        showDanger(error instanceof Error ? error.message : 'Şifre güncellenirken hata oluştu');
       }
     });
   };
@@ -81,11 +81,11 @@ export function AccountForm({ user }: AccountFormProps) {
   return (
     <div className="space-y-6">
       <div className="bg-card rounded-xl border border-border shadow-sm p-6">
-        <h3 className="text-lg font-bold text-foreground mb-4">Profile Information</h3>
+        <h3 className="text-lg font-bold text-foreground mb-4">Profil Bilgileri</h3>
         <form onSubmit={handleProfileSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">First Name</label>
+              <label className="block text-sm font-medium text-foreground mb-1">Ad</label>
               <input
                 type="text"
                 value={firstName}
@@ -95,7 +95,7 @@ export function AccountForm({ user }: AccountFormProps) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Last Name</label>
+              <label className="block text-sm font-medium text-foreground mb-1">Soyad</label>
               <input
                 type="text"
                 value={lastName}
@@ -106,7 +106,7 @@ export function AccountForm({ user }: AccountFormProps) {
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1">Email</label>
+            <label className="block text-sm font-medium text-foreground mb-1">E-posta</label>
             <input
               type="email"
               value={email}
@@ -124,7 +124,7 @@ export function AccountForm({ user }: AccountFormProps) {
               {isPending ? (
                 <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
               ) : (
-                'Update Profile'
+                'Profili Güncelle'
               )}
             </button>
           </div>
@@ -132,10 +132,10 @@ export function AccountForm({ user }: AccountFormProps) {
       </div>
 
       <div className="bg-card rounded-xl border border-border shadow-sm p-6">
-        <h3 className="text-lg font-bold text-foreground mb-4">Change Password</h3>
+        <h3 className="text-lg font-bold text-foreground mb-4">Şifre Değiştir</h3>
         <form onSubmit={handlePasswordSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1">Current Password</label>
+            <label className="block text-sm font-medium text-foreground mb-1">Mevcut Şifre</label>
             <input
               type="password"
               value={currentPassword}
@@ -144,17 +144,17 @@ export function AccountForm({ user }: AccountFormProps) {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1">New Password</label>
+            <label className="block text-sm font-medium text-foreground mb-1">Yeni Şifre</label>
             <input
               type="password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="Minimum 8 characters"
+              placeholder="En az 8 karakter"
               className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-muted/20"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1">Confirm New Password</label>
+            <label className="block text-sm font-medium text-foreground mb-1">Yeni Şifreyi Onayla</label>
             <input
               type="password"
               value={confirmPassword}
@@ -171,7 +171,7 @@ export function AccountForm({ user }: AccountFormProps) {
               {isPending ? (
                 <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
               ) : (
-                'Update Password'
+                'Şifreyi Güncelle'
               )}
             </button>
           </div>

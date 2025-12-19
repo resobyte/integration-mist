@@ -34,7 +34,7 @@ export function LoginForm() {
       const result = await response.json();
       
       if (!result.success) {
-        setError(result.error || 'Login failed');
+        setError(result.error || 'Giriş başarısız');
         setIsPending(false);
         return;
       }
@@ -45,7 +45,7 @@ export function LoginForm() {
       }
     } catch (error) {
       console.error('Login error:', error);
-      setError('An unexpected error occurred. Please try again.');
+      setError('Beklenmeyen bir hata oluştu. Lütfen tekrar deneyin.');
       setIsPending(false);
     }
   };
@@ -53,7 +53,7 @@ export function LoginForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div>
-        <label className="block text-sm font-medium text-foreground mb-1.5">Email Address</label>
+        <label className="block text-sm font-medium text-foreground mb-1.5">E-posta Adresi</label>
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-muted-foreground">
             <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -73,7 +73,7 @@ export function LoginForm() {
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-foreground mb-1.5">Password</label>
+        <label className="block text-sm font-medium text-foreground mb-1.5">Şifre</label>
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-muted-foreground">
             <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -95,9 +95,9 @@ export function LoginForm() {
       <div className="flex items-center justify-between text-sm">
         <label className="flex items-center text-muted-foreground cursor-pointer">
           <input type="checkbox" className="mr-2 rounded border-input text-primary focus:ring-primary" />
-          Remember me
+          Beni hatırla
         </label>
-        <a href="#" className="text-primary hover:text-primary-dark font-medium transition-colors">Forgot password?</a>
+        <a href="#" className="text-primary hover:text-primary-dark font-medium transition-colors">Şifremi unuttum?</a>
       </div>
 
       {error && (
@@ -114,12 +114,12 @@ export function LoginForm() {
         {isPending ? (
           <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
         ) : (
-          'Sign In'
+          'Giriş Yap'
         )}
       </button>
 
       <div className="text-center text-sm text-muted-foreground">
-        Don&apos;t have an account? <a href="#" className="text-primary font-medium hover:underline">Contact Support</a>
+        Hesabınız yok mu? <a href="#" className="text-primary font-medium hover:underline">Destek ile İletişime Geçin</a>
       </div>
     </form>
   );

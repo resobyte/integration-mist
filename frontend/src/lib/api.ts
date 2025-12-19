@@ -3,7 +3,7 @@ import { ApiResponse, ErrorResponse, PaginationResponse } from '@/types';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
 interface FetchOptions extends RequestInit {
-  params?: Record<string, string | number | undefined>;
+  params?: Record<string, string | number | string[] | number[] | undefined>;
 }
 
 class ApiError extends Error {
@@ -33,13 +33,19 @@ async function handleResponse<T>(response: Response): Promise<T> {
   return data;
 }
 
-function buildUrl(endpoint: string, params?: Record<string, string | number | undefined>): string {
+function buildUrl(endpoint: string, params?: Record<string, string | number | string[] | number[] | undefined>): string {
   const url = new URL(`${API_URL}${endpoint}`);
   
   if (params) {
     Object.entries(params).forEach(([key, value]) => {
       if (value !== undefined) {
-        url.searchParams.append(key, String(value));
+        if (Array.isArray(value)) {
+          value.forEach((item) => {
+            url.searchParams.append(key, String(item));
+          });
+        } else {
+          url.searchParams.append(key, String(value));
+        }
       }
     });
   }

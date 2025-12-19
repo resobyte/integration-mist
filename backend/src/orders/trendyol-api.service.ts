@@ -133,5 +133,73 @@ export class TrendyolApiService {
       );
     }
   }
+
+  async updatePackage(
+    sellerId: string,
+    apiKey: string,
+    apiSecret: string,
+    packageId: number,
+    lines: Array<{ lineId: number; quantity: number }>,
+  ): Promise<boolean> {
+    try {
+      const baseUrl = this.configService.get<string>('TRENDYOL_ORDER_API_URL') || 
+                     'https://apigw.trendyol.com/integration/order/sellers';
+
+      const url = `${baseUrl}/${sellerId}/shipment-packages/${packageId}`;
+
+      const integrationCompanyName = this.configService.get<string>('TRENDYOL_INTEGRATION_COMPANY_NAME', 'SelfIntegration');
+      const userAgent = this.configService.get<string>('TRENDYOL_USER_AGENT', `${sellerId} - ${integrationCompanyName}`.substring(0, 30));
+
+      const tokenString = `${apiKey}:${apiSecret}`;
+      const base64Token = Buffer.from(tokenString, 'utf8').toString('base64');
+      const authToken = `Basic ${base64Token}`;
+
+      this.logger.log(`Updating package status to Picking for packageId: ${packageId}, sellerId: ${sellerId}`);
+
+      const response = await this.axiosInstance.put(
+        url,
+        {
+          lines,
+          params: {},
+          status: 'Picking',
+        },
+        {
+          headers: {
+            'Authorization': authToken,
+            'Content-Type': 'application/json',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'User-Agent': userAgent,
+          },
+          maxRedirects: 0,
+        },
+      );
+
+      this.logger.log(`Successfully updated package status to Picking for packageId: ${packageId}`);
+
+      return true;
+    } catch (error) {
+      this.logger.error(`Error updating package status to Picking: ${error.message}`, error.stack);
+      
+      if (axios.isAxiosError(error)) {
+        if (error.response) {
+          throw new HttpException(
+            `Trendyol API error: ${error.response.status} - ${JSON.stringify(error.response.data)}`,
+            error.response.status || HttpStatus.BAD_GATEWAY,
+          );
+        }
+        if (error.request) {
+          throw new HttpException(
+            'No response from Trendyol API',
+            HttpStatus.GATEWAY_TIMEOUT,
+          );
+        }
+      }
+      
+      throw new HttpException(
+        `Failed to update package status: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
 }
 

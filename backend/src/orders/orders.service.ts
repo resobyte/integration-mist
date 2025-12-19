@@ -233,6 +233,14 @@ export class OrdersService {
     };
   }
 
+  async getCount(status?: OrderStatus): Promise<number> {
+    const where: any = {};
+    if (status) {
+      where.status = status;
+    }
+    return this.orderRepository.count({ where });
+  }
+
   async findOne(id: string): Promise<OrderResponseDto> {
     const order = await this.orderRepository.findOne({
       where: { id },

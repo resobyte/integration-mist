@@ -47,7 +47,7 @@ export function OrdersTable() {
   const [isFetchingAll, setIsFetchingAll] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStoreId, setSelectedStoreId] = useState<string>('');
-  const [selectedStatus, setSelectedStatus] = useState<OrderStatus | ''>('');
+  const [selectedStatus, setSelectedStatus] = useState<OrderStatus | ''>(OrderStatus.PENDING);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [showSkippedModal, setShowSkippedModal] = useState(false);
   const [fetchResults, setFetchResults] = useState<FetchResult[]>([]);
@@ -96,15 +96,15 @@ export function OrdersTable() {
     } finally {
       setIsLoading(false);
     }
-  }, [currentPage, sortConfig, selectedStoreId, selectedStatus, pageSize]);
-
-  useEffect(() => {
-    fetchOrders();
-  }, [fetchOrders]);
+  }, [currentPage, sortConfig.sortBy, sortConfig.sortOrder, selectedStoreId, selectedStatus, pageSize]);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [selectedStoreId, selectedStatus]);
+
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
 
   const handleFetchOrders = async (storeId: string) => {
     setIsFetching(true);

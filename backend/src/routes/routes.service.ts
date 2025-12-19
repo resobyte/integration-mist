@@ -14,6 +14,7 @@ import { CreateRouteDto } from './dto/create-route.dto';
 import { RouteFilterDto } from './dto/route-filter.dto';
 import { RouteResponseDto } from './dto/route-response.dto';
 import { OrdersService } from '../orders/orders.service';
+import { TrendyolApiService } from '../orders/trendyol-api.service';
 import { ZplLabelService } from './zpl-label.service';
 
 @Injectable()
@@ -28,6 +29,7 @@ export class RoutesService {
     @InjectRepository(Order)
     private readonly orderRepository: Repository<Order>,
     private readonly ordersService: OrdersService,
+    private readonly trendyolApiService: TrendyolApiService,
     private readonly zplLabelService: ZplLabelService,
   ) {}
 
@@ -185,6 +187,48 @@ export class RoutesService {
       await this.orderRepository.update(order.id, {
         status: OrderStatus.PACKED,
       });
+
+      if (order.store?.sellerId && order.store?.apiKey && order.store?.apiSecret) {
+        try {
+          const lines = order.lines as Array<Record<string, unknown>> | null;
+          
+          if (lines && lines.length > 0) {
+            const packageLines = lines
+              .map((line) => {
+                const lineId = line.id || line.lineId || line.orderLineId;
+                const quantity = line.quantity || 1;
+                
+                if (lineId && typeof lineId === 'number' && lineId > 0) {
+                  return {
+                    lineId: lineId as number,
+                    quantity: typeof quantity === 'number' ? quantity : parseInt(String(quantity), 10) || 1,
+                  };
+                }
+                return null;
+              })
+              .filter((line): line is { lineId: number; quantity: number } => line !== null);
+
+            if (packageLines.length > 0) {
+              await this.trendyolApiService.updatePackage(
+                order.store.sellerId,
+                order.store.apiKey,
+                order.store.apiSecret,
+                order.shipmentPackageId,
+                packageLines,
+              );
+              this.logger.log(`Updated Trendyol package status to Picking for order ${order.orderNumber}`);
+            } else {
+              this.logger.warn(`No valid line IDs found for order ${order.orderNumber}, skipping Trendyol update`);
+            }
+          } else {
+            this.logger.warn(`No lines found for order ${order.orderNumber}, skipping Trendyol update`);
+          }
+        } catch (error) {
+          this.logger.error(`Failed to update Trendyol package status for order ${order.orderNumber}: ${error.message}`, error.stack);
+        }
+      } else {
+        this.logger.warn(`Store credentials missing for order ${order.orderNumber}, skipping Trendyol update`);
+      }
     }
 
     const updatedRoute = await this.routeRepository.findOne({
@@ -224,11 +268,19 @@ export class RoutesService {
     await this.routeRepository.update(id, { status: RouteStatus.CANCELLED });
   }
 
-  // TODO: Sipariş durumuna göre filtreleme eklenecek (COLLECTING, PACKED, SHIPPED, DELIVERED, CANCELLED hariç tutulacak)
   async getRouteSuggestions(storeId?: string): Promise<RouteSuggestion[]> {
+    const excludedStatuses = [
+      OrderStatus.COLLECTING,
+      OrderStatus.PACKED,
+      OrderStatus.SHIPPED,
+      OrderStatus.DELIVERED,
+      OrderStatus.CANCELLED,
+    ];
+
     const queryBuilder = this.orderRepository
       .createQueryBuilder('order')
-      .leftJoinAndSelect('order.store', 'store');
+      .leftJoinAndSelect('order.store', 'store')
+      .where('order.status NOT IN (:...excludedStatuses)', { excludedStatuses });
 
     if (storeId) {
       queryBuilder.andWhere('order.storeId = :storeId', { storeId });

@@ -59,7 +59,7 @@ export function RoutesTable() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const [selectedRoute, setSelectedRoute] = useState<Route | null>(null);
-  const [statusFilter, setStatusFilter] = useState<RouteStatus[]>([]);
+  const [statusFilter, setStatusFilter] = useState<RouteStatus[]>([RouteStatus.COLLECTING, RouteStatus.READY]);
   const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
   const [formData, setFormData] = useState<RouteFormData>({
     name: '',
@@ -80,41 +80,6 @@ export function RoutesTable() {
   const [suggestions, setSuggestions] = useState<RouteSuggestion[]>([]);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [selectedSuggestion, setSelectedSuggestion] = useState<RouteSuggestion | null>(null);
-
-  const fetchSuggestions = useCallback(async () => {
-    setIsLoadingSuggestions(true);
-    try {
-      const response = await apiGet<RouteSuggestion[]>('/routes/suggestions');
-      setSuggestions(response.data || []);
-    } catch {
-      console.error('Failed to fetch suggestions');
-    } finally {
-      setIsLoadingSuggestions(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchRoutes();
-    fetchProducts();
-    fetchStores();
-    fetchSuggestions();
-    fetchPendingOrdersCount();
-  }, []);
-
-  useEffect(() => {
-    fetchRoutes();
-  }, [fetchRoutes]);
-
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && (isModalOpen || isFilterModalOpen)) {
-        setIsModalOpen(false);
-        setIsFilterModalOpen(false);
-      }
-    };
-    document.addEventListener('keydown', handleEscape);
-    return () => document.removeEventListener('keydown', handleEscape);
-  }, [isModalOpen, isFilterModalOpen]);
 
   const fetchRoutes = useCallback(async () => {
     setIsLoading(true);
@@ -138,6 +103,18 @@ export function RoutesTable() {
       setPendingOrdersCount(response.data?.count || 0);
     } catch {
       console.error('Failed to fetch pending orders count');
+    }
+  }, []);
+
+  const fetchSuggestions = useCallback(async () => {
+    setIsLoadingSuggestions(true);
+    try {
+      const response = await apiGet<RouteSuggestion[]>('/routes/suggestions');
+      setSuggestions(response.data || []);
+    } catch {
+      console.error('Failed to fetch suggestions');
+    } finally {
+      setIsLoadingSuggestions(false);
     }
   }, []);
 
@@ -176,6 +153,28 @@ export function RoutesTable() {
       console.error('Failed to fetch stores');
     }
   }, []);
+
+  useEffect(() => {
+    fetchProducts();
+    fetchStores();
+    fetchSuggestions();
+    fetchPendingOrdersCount();
+  }, [fetchProducts, fetchStores, fetchSuggestions, fetchPendingOrdersCount]);
+
+  useEffect(() => {
+    fetchRoutes();
+  }, [fetchRoutes]);
+
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && (isModalOpen || isFilterModalOpen)) {
+        setIsModalOpen(false);
+        setIsFilterModalOpen(false);
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [isModalOpen, isFilterModalOpen]);
 
   const handleFilterOrders = async () => {
     setIsFiltering(true);
@@ -376,10 +375,11 @@ export function RoutesTable() {
         <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
-            checked={statusFilter.includes(RouteStatus.COLLECTING) || statusFilter.includes(RouteStatus.READY)}
+            checked={statusFilter.includes(RouteStatus.COLLECTING) && statusFilter.includes(RouteStatus.READY)}
             onChange={(e) => {
               if (e.target.checked) {
-                setStatusFilter([RouteStatus.COLLECTING, RouteStatus.READY]);
+                const completed = statusFilter.includes(RouteStatus.COMPLETED) ? [RouteStatus.COMPLETED] : [];
+                setStatusFilter([RouteStatus.COLLECTING, RouteStatus.READY, ...completed]);
               } else {
                 setStatusFilter(statusFilter.filter((s) => s !== RouteStatus.COLLECTING && s !== RouteStatus.READY));
               }

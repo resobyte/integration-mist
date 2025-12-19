@@ -18,7 +18,7 @@ import { ProductsModule } from '../products/products.module';
   ],
   controllers: [OrdersController],
   providers: [OrdersService, OrdersCronService, TrendyolApiService],
-  exports: [OrdersService],
+  exports: [OrdersService, TrendyolApiService],
 })
 export class OrdersModule {}
 

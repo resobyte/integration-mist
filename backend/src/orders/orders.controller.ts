@@ -46,11 +46,35 @@ export class OrdersController {
 
   @Get()
   async findAll(
-    @Query() paginationDto: PaginationDto,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: 'ASC' | 'DESC',
     @Query('storeId') storeId?: string,
-    @Query('status') status?: OrderStatus,
+    @Query('status') status?: string,
   ) {
-    return this.ordersService.findAll(paginationDto, storeId, status);
+    const paginationDto: PaginationDto = {
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 10,
+      sortBy,
+      sortOrder: sortOrder || 'DESC',
+    };
+    const orderStatus = status && Object.values(OrderStatus).includes(status as OrderStatus) 
+      ? (status as OrderStatus) 
+      : undefined;
+    return this.ordersService.findAll(paginationDto, storeId, orderStatus);
+  }
+
+  @Get('count')
+  async getCount(@Query('status') status?: string) {
+    const orderStatus = status && Object.values(OrderStatus).includes(status as OrderStatus) 
+      ? (status as OrderStatus) 
+      : undefined;
+    const count = await this.ordersService.getCount(orderStatus);
+    return {
+      success: true,
+      data: { count },
+    };
   }
 
   @Get(':id')

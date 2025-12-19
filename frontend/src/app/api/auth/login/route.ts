@@ -10,6 +10,7 @@ export async function POST(request: NextRequest) {
       headers: {
         'Content-Type': 'application/json',
       },
+      credentials: 'include',
       body: JSON.stringify(body),
     });
 
@@ -28,8 +29,43 @@ export async function POST(request: NextRequest) {
     });
 
     const setCookieHeaders = response.headers.getSetCookie();
-    for (const cookie of setCookieHeaders) {
-      nextResponse.headers.append('Set-Cookie', cookie);
+    const isProduction = process.env.NODE_ENV === 'production';
+
+    for (const cookieHeader of setCookieHeaders) {
+      const parts = cookieHeader.split(';');
+      const [nameValue] = parts;
+      const [name, ...valueParts] = nameValue.split('=');
+      const value = valueParts.join('=');
+
+      if (name && value) {
+        const cookieName = name.trim();
+        const cookieValue = value.trim();
+
+        const cookieOptions: {
+          httpOnly: boolean;
+          secure: boolean;
+          sameSite: 'none' | 'lax';
+          path: string;
+          maxAge?: number;
+          domain?: string;
+        } = {
+          httpOnly: true,
+          secure: isProduction,
+          sameSite: (isProduction ? 'none' : 'lax') as 'none' | 'lax',
+          path: '/',
+        };
+
+        if (isProduction) {
+          cookieOptions.domain = '.railway.app';
+        }
+
+        const maxAgeMatch = cookieHeader.match(/Max-Age=(\d+)/);
+        if (maxAgeMatch) {
+          cookieOptions.maxAge = parseInt(maxAgeMatch[1], 10);
+        }
+
+        nextResponse.cookies.set(cookieName, cookieValue, cookieOptions);
+      }
     }
 
     return nextResponse;

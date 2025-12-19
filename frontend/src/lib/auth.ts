@@ -17,6 +17,7 @@ export async function getServerUser(): Promise<AuthUser | null> {
         'Content-Type': 'application/json',
         Cookie: `access_token=${accessToken.value}`,
       },
+      credentials: 'include',
       cache: 'no-store',
     });
 

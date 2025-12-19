@@ -17,6 +17,9 @@ async function verifyToken(accessToken: string): Promise<{ role: Role } | null> 
     });
 
     if (!response.ok) {
+      if (response.status === 401) {
+        return null;
+      }
       return null;
     }
 

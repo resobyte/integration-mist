@@ -41,6 +41,7 @@ export function LoginForm() {
 
       if (result.user) {
         const redirectUrl = callbackUrl || getDefaultRouteByRole(result.user.role);
+        await new Promise((resolve) => setTimeout(resolve, 100));
         window.location.href = redirectUrl;
       }
     } catch (error) {

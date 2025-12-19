@@ -21,6 +21,7 @@ export async function login(
       headers: {
         'Content-Type': 'application/json',
       },
+      credentials: 'include',
       body: JSON.stringify({ email, password }),
     });
 
@@ -35,6 +36,14 @@ export async function login(
 
     const setCookieHeaders = response.headers.getSetCookie();
     const cookieStore = cookies();
+    const isProduction = process.env.NODE_ENV === 'production';
+    const cookieOptions = {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: (isProduction ? 'none' : 'lax') as 'none' | 'lax',
+      path: '/',
+      ...(isProduction && { domain: '.railway.app' }),
+    };
 
     for (const cookieHeader of setCookieHeaders) {
       const parts = cookieHeader.split(';');
@@ -45,10 +54,7 @@ export async function login(
       if (name && value) {
         const isRefresh = name.trim().includes('refresh');
         cookieStore.set(name.trim(), value.trim(), {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'lax',
-          path: '/',
+          ...cookieOptions,
           maxAge: isRefresh ? 7 * 24 * 60 * 60 : 15 * 60,
         });
       }
@@ -79,6 +85,7 @@ export async function logout(): Promise<void> {
           'Content-Type': 'application/json',
           Cookie: `access_token=${accessToken.value}`,
         },
+        credentials: 'include',
       });
     }
   } catch (error) {
@@ -105,6 +112,7 @@ export async function refreshAccessToken(): Promise<boolean> {
         'Content-Type': 'application/json',
         Cookie: `refresh_token=${refreshToken.value}`,
       },
+      credentials: 'include',
     });
 
     if (!response.ok) {
@@ -112,6 +120,14 @@ export async function refreshAccessToken(): Promise<boolean> {
     }
 
     const setCookieHeaders = response.headers.getSetCookie();
+    const isProduction = process.env.NODE_ENV === 'production';
+    const cookieOptions = {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: (isProduction ? 'none' : 'lax') as 'none' | 'lax',
+      path: '/',
+      ...(isProduction && { domain: '.railway.app' }),
+    };
 
     for (const cookieHeader of setCookieHeaders) {
       const parts = cookieHeader.split(';');
@@ -122,10 +138,7 @@ export async function refreshAccessToken(): Promise<boolean> {
       if (name && value) {
         const isRefresh = name.trim().includes('refresh');
         cookieStore.set(name.trim(), value.trim(), {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'lax',
-          path: '/',
+          ...cookieOptions,
           maxAge: isRefresh ? 7 * 24 * 60 * 60 : 15 * 60,
         });
       }

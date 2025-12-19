@@ -86,6 +86,7 @@ export class AuthController {
       secure: cookieOptions.secure,
       sameSite: cookieOptions.sameSite,
       httpOnly: cookieOptions.httpOnly,
+      domain: cookieOptions.domain,
     });
     const refreshCookieOptions = this.authService.getCookieOptions(true);
     response.clearCookie('refresh_token', {
@@ -93,6 +94,7 @@ export class AuthController {
       secure: refreshCookieOptions.secure,
       sameSite: refreshCookieOptions.sameSite,
       httpOnly: refreshCookieOptions.httpOnly,
+      domain: refreshCookieOptions.domain,
     });
 
     return { message: 'Logged out successfully' };

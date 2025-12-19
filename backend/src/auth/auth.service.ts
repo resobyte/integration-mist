@@ -164,14 +164,24 @@ export class AuthService {
   }
 
   private async generateTokens(payload: JwtPayload): Promise<TokenPair> {
+    const accessSecret = this.configService.get<string>('JWT_ACCESS_SECRET');
+    const refreshSecret = this.configService.get<string>('JWT_REFRESH_SECRET');
+
+    if (!accessSecret) {
+      throw new Error('JWT_ACCESS_SECRET is not configured');
+    }
+    if (!refreshSecret) {
+      throw new Error('JWT_REFRESH_SECRET is not configured');
+    }
+
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {
-        secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
+        secret: accessSecret,
         expiresIn:
           this.configService.get<string>('JWT_ACCESS_EXPIRATION') || '15m',
       }),
       this.jwtService.signAsync(payload, {
-        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+        secret: refreshSecret,
         expiresIn:
           this.configService.get<string>('JWT_REFRESH_EXPIRATION') || '7d',
       }),
@@ -186,15 +196,37 @@ export class AuthService {
     sameSite: 'strict' | 'lax' | 'none';
     maxAge: number;
     path: string;
+    domain?: string;
   } {
     const isProduction = this.configService.get('NODE_ENV') === 'production';
+    let cookieDomain = this.configService.get<string>('COOKIE_DOMAIN');
 
-    return {
+    if (isProduction && !cookieDomain) {
+      const backendUrl = this.configService.get<string>('BACKEND_URL') || '';
+      if (backendUrl.includes('.railway.app')) {
+        cookieDomain = '.railway.app';
+      }
+    }
+
+    const options: {
+      httpOnly: boolean;
+      secure: boolean;
+      sameSite: 'strict' | 'lax' | 'none';
+      maxAge: number;
+      path: string;
+      domain?: string;
+    } = {
       httpOnly: true,
       secure: isProduction,
       sameSite: isProduction ? 'none' : 'lax',
       maxAge: isRefreshToken ? 7 * 24 * 60 * 60 * 1000 : 15 * 60 * 1000,
       path: '/',
     };
+
+    if (cookieDomain) {
+      options.domain = cookieDomain;
+    }
+
+    return options;
   }
 }

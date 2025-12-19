@@ -12,6 +12,10 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     private configService: ConfigService,
     private authService: AuthService,
   ) {
+    const secret = configService.get<string>('JWT_ACCESS_SECRET');
+    if (!secret) {
+      throw new Error('JWT_ACCESS_SECRET is not configured');
+    }
     super({
       jwtFromRequest: ExtractJwt.fromExtractors([
         (request: Request) => {
@@ -19,7 +23,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
         },
       ]),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('JWT_ACCESS_SECRET'),
+      secretOrKey: secret,
       passReqToCallback: true,
     });
   }
@@ -28,6 +32,13 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     const token = request.cookies?.access_token;
 
     if (!token) {
+      const isProduction = process.env.NODE_ENV === 'production';
+      if (!isProduction) {
+        const cookieHeader = request.headers.cookie;
+        throw new UnauthorizedException(
+          `Token not found. Cookies: ${cookieHeader || 'none'}`,
+        );
+      }
       throw new UnauthorizedException('Token not found');
     }
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useToast } from '@/components/common/ToastContext';
-import { apiGet, apiPost, apiDelete } from '@/lib/api';
+import { apiGet, apiGetPaginated, apiPost, apiDelete } from '@/lib/api';
 import { Route, RouteStatus, Order, Store, Product } from '@/types';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
@@ -18,6 +18,38 @@ interface FilterData {
   quantities: number[];
   storeId: string;
   status: string;
+}
+
+interface RouteSuggestionProduct {
+  barcode: string;
+  name: string;
+  orderCount: number;
+  totalQuantity: number;
+}
+
+interface RouteSuggestionOrder {
+  id: string;
+  orderNumber: string;
+  store: { id: string; name: string } | null;
+  customerFirstName: string | null;
+  customerLastName: string | null;
+  products: { barcode: string; name: string; quantity: number }[];
+  uniqueProductCount: number;
+  totalQuantity: number;
+}
+
+interface RouteSuggestion {
+  id: string;
+  type: 'single_product' | 'mixed' | 'all_singles';
+  name: string;
+  description: string;
+  storeName?: string;
+  storeId?: string;
+  orderCount: number;
+  totalQuantity: number;
+  products: RouteSuggestionProduct[];
+  orders: RouteSuggestionOrder[];
+  priority: number;
 }
 
 export function RoutesTable() {
@@ -43,11 +75,27 @@ export function RoutesTable() {
   const [stores, setStores] = useState<Store[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFiltering, setIsFiltering] = useState(false);
+  const [suggestions, setSuggestions] = useState<RouteSuggestion[]>([]);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const [selectedSuggestion, setSelectedSuggestion] = useState<RouteSuggestion | null>(null);
+
+  const fetchSuggestions = useCallback(async () => {
+    setIsLoadingSuggestions(true);
+    try {
+      const response = await apiGet<RouteSuggestion[]>('/routes/suggestions');
+      setSuggestions(response.data || []);
+    } catch {
+      console.error('Failed to fetch suggestions');
+    } finally {
+      setIsLoadingSuggestions(false);
+    }
+  }, []);
 
   useEffect(() => {
     fetchRoutes();
     fetchProducts();
     fetchStores();
+    fetchSuggestions();
   }, []);
 
   useEffect(() => {
@@ -64,7 +112,7 @@ export function RoutesTable() {
   const fetchRoutes = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await apiGet<{ success: boolean; data: Route[] }>('/routes');
+      const response = await apiGet<Route[]>('/routes');
       setRoutes(response.data || []);
     } catch {
       console.error('Failed to fetch routes');
@@ -80,7 +128,7 @@ export function RoutesTable() {
       let hasMore = true;
 
       while (hasMore) {
-        const response = await apiGet<{ success: boolean; data: Product[]; meta: any }>(`/products?page=${page}&limit=100`);
+        const response = await apiGetPaginated<Product>('/products', { params: { page, limit: 100 } });
         if (response && response.data) {
           allProducts.push(...response.data);
           if (response.meta && page >= response.meta.totalPages) {
@@ -102,7 +150,7 @@ export function RoutesTable() {
 
   const fetchStores = useCallback(async () => {
     try {
-      const response = await apiGet<{ success: boolean; data: Store[]; meta: any }>('/stores?page=1&limit=100');
+      const response = await apiGetPaginated<Store>('/stores', { params: { page: 1, limit: 100 } });
       setStores(response.data || []);
     } catch {
       console.error('Failed to fetch stores');
@@ -156,13 +204,25 @@ export function RoutesTable() {
       setIsModalOpen(false);
       setFormData({ name: '', description: '', selectedOrderIds: [] });
       setFilteredOrders([]);
+      setSelectedSuggestion(null);
       fetchRoutes();
+      fetchSuggestions();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Rota oluşturulurken hata oluştu';
       showDanger(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleSelectSuggestion = (suggestion: RouteSuggestion) => {
+    setSelectedSuggestion(suggestion);
+    setFormData({
+      name: suggestion.name,
+      description: suggestion.description,
+      selectedOrderIds: suggestion.orders.map((o) => o.id),
+    });
+    setIsModalOpen(true);
   };
 
   const handlePrintLabel = async (routeId: string) => {
@@ -193,16 +253,16 @@ export function RoutesTable() {
   };
 
   const handleDeleteRoute = async (routeId: string) => {
-    if (!confirm('Bu rotayı silmek istediğinize emin misiniz?')) {
+    if (!confirm('Bu rotayı iptal etmek istediğinize emin misiniz?')) {
       return;
     }
 
     try {
       await apiDelete(`/routes/${routeId}`);
-      showSuccess('Rota başarıyla silindi');
+      showSuccess('Rota başarıyla iptal edildi');
       fetchRoutes();
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Rota silinirken hata oluştu';
+      const errorMessage = error instanceof Error ? error.message : 'Rota iptal edilirken hata oluştu';
       showDanger(errorMessage);
     }
   };
@@ -212,6 +272,7 @@ export function RoutesTable() {
       [RouteStatus.COLLECTING]: 'Toplanıyor',
       [RouteStatus.READY]: 'Hazır',
       [RouteStatus.COMPLETED]: 'Tamamlandı',
+      [RouteStatus.CANCELLED]: 'İptal Edildi',
     };
     return labels[status] || status;
   };
@@ -221,6 +282,7 @@ export function RoutesTable() {
       [RouteStatus.COLLECTING]: 'bg-indigo-500/10 text-indigo-600 border-indigo-500/20',
       [RouteStatus.READY]: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
       [RouteStatus.COMPLETED]: 'bg-success/10 text-success border-success/20',
+      [RouteStatus.CANCELLED]: 'bg-destructive/10 text-destructive border-destructive/20',
     };
     return colors[status] || 'bg-muted text-muted-foreground border-border';
   };
@@ -296,7 +358,7 @@ export function RoutesTable() {
                         >
                           Detay
                         </button>
-                        {route.status !== RouteStatus.COMPLETED && (
+                        {route.status !== RouteStatus.COMPLETED && route.status !== RouteStatus.CANCELLED && (
                           <button
                             onClick={() => handlePrintLabel(route.id)}
                             className="text-blue-600 hover:text-blue-700 text-sm font-medium"
@@ -304,12 +366,14 @@ export function RoutesTable() {
                             Etiket Yazdır
                           </button>
                         )}
-                        <button
-                          onClick={() => handleDeleteRoute(route.id)}
-                          className="text-destructive hover:text-destructive-dark text-sm font-medium"
-                        >
-                          Sil
-                        </button>
+                        {route.status !== RouteStatus.COMPLETED && route.status !== RouteStatus.CANCELLED && (
+                          <button
+                            onClick={() => handleDeleteRoute(route.id)}
+                            className="text-destructive hover:text-destructive-dark text-sm font-medium"
+                          >
+                            İptal Et
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -325,6 +389,108 @@ export function RoutesTable() {
           </table>
         </div>
       </div>
+
+      {suggestions.length > 0 && (
+        <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-border flex justify-between items-center">
+            <div>
+              <h3 className="text-lg font-bold text-foreground flex items-center">
+                <svg className="w-5 h-5 mr-2 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+                Rota Önerileri
+              </h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                Siparişleriniz otomatik olarak gruplandı. Tek tıkla rota oluşturun.
+              </p>
+            </div>
+            <button
+              onClick={fetchSuggestions}
+              disabled={isLoadingSuggestions}
+              className="text-primary hover:text-primary-dark text-sm font-medium flex items-center"
+            >
+              {isLoadingSuggestions ? (
+                <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin mr-1" />
+              ) : (
+                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              )}
+              Yenile
+            </button>
+          </div>
+          <div className="p-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {suggestions.map((suggestion) => (
+              <div
+                key={suggestion.id}
+                className={`border rounded-lg p-4 hover:border-primary/50 hover:bg-muted/10 transition-all cursor-pointer ${
+                  suggestion.type === 'all_singles'
+                    ? 'border-primary/30 bg-primary/5'
+                    : suggestion.type === 'single_product'
+                    ? 'border-success/30 bg-success/5'
+                    : 'border-secondary/30 bg-secondary/5'
+                }`}
+                onClick={() => handleSelectSuggestion(suggestion)}
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex flex-wrap gap-1.5">
+                    {suggestion.storeName && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-muted text-foreground border border-border">
+                        {suggestion.storeName}
+                      </span>
+                    )}
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                        suggestion.type === 'all_singles'
+                          ? 'bg-primary/10 text-primary border border-primary/20'
+                          : suggestion.type === 'single_product'
+                          ? 'bg-success/10 text-success border border-success/20'
+                          : 'bg-secondary/10 text-secondary border border-secondary/20'
+                      }`}
+                    >
+                      {suggestion.type === 'all_singles'
+                        ? 'Tüm Tekler'
+                        : suggestion.type === 'single_product'
+                        ? 'Tek Ürün'
+                        : 'Karışık'}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-lg font-bold text-foreground">{suggestion.orderCount}</div>
+                    <div className="text-xs text-muted-foreground">sipariş</div>
+                  </div>
+                </div>
+                <h4 className="font-semibold text-foreground mb-1 line-clamp-1">{suggestion.name}</h4>
+                <p className="text-sm text-muted-foreground mb-3 line-clamp-1">{suggestion.description}</p>
+                <div className="space-y-1.5">
+                  {suggestion.products.slice(0, 3).map((product, idx) => (
+                    <div key={idx} className="flex items-center justify-between text-xs">
+                      <span className="text-foreground truncate max-w-[70%]">{product.name}</span>
+                      <span className="text-muted-foreground font-mono">
+                        {product.totalQuantity} adet
+                      </span>
+                    </div>
+                  ))}
+                  {suggestion.products.length > 3 && (
+                    <div className="text-xs text-muted-foreground">
+                      +{suggestion.products.length - 3} ürün daha...
+                    </div>
+                  )}
+                </div>
+                <button
+                  className="mt-4 w-full bg-primary hover:bg-primary-dark text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleSelectSuggestion(suggestion);
+                  }}
+                >
+                  Bu Rotayı Oluştur
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {isFilterModalOpen && (
         <div
@@ -539,14 +705,22 @@ export function RoutesTable() {
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto"
           onClick={(e) => {
-            if (e.target === e.currentTarget) setIsModalOpen(false);
+            if (e.target === e.currentTarget) {
+              setIsModalOpen(false);
+              setSelectedSuggestion(null);
+            }
           }}
         >
-          <div className="bg-card w-full max-w-md rounded-xl shadow-2xl border border-border my-8">
+          <div className="bg-card w-full max-w-2xl rounded-xl shadow-2xl border border-border my-8">
             <div className="flex justify-between items-center p-6 border-b border-border">
-              <h3 className="text-xl font-bold text-foreground">Yeni Rota Oluştur</h3>
+              <h3 className="text-xl font-bold text-foreground">
+                {selectedSuggestion ? 'Önerilen Rotayı Oluştur' : 'Yeni Rota Oluştur'}
+              </h3>
               <button
-                onClick={() => setIsModalOpen(false)}
+                onClick={() => {
+                  setIsModalOpen(false);
+                  setSelectedSuggestion(null);
+                }}
                 className="text-muted-foreground hover:text-foreground"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -577,21 +751,75 @@ export function RoutesTable() {
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-muted/20"
-                  rows={3}
+                  rows={2}
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-1">
-                  Seçili Siparişler ({formData.selectedOrderIds.length})
-                </label>
-                {formData.selectedOrderIds.length === 0 && (
-                  <p className="text-sm text-muted-foreground">Lütfen önce siparişleri filtreleyin</p>
-                )}
-              </div>
+
+              {selectedSuggestion && (
+                <div className="border border-border rounded-lg overflow-hidden">
+                  <div className="bg-muted/30 px-4 py-2 border-b border-border">
+                    <h4 className="text-sm font-semibold text-foreground">
+                      Dahil Edilecek Siparişler ({selectedSuggestion.orders.length})
+                    </h4>
+                  </div>
+                  <div className="max-h-48 overflow-y-auto">
+                    <table className="w-full text-left">
+                      <thead className="bg-muted/20 sticky top-0">
+                        <tr className="text-xs text-muted-foreground uppercase">
+                          <th className="px-4 py-2">Sipariş No</th>
+                          <th className="px-4 py-2">Müşteri</th>
+                          <th className="px-4 py-2">Ürünler</th>
+                          <th className="px-4 py-2 text-right">Toplam</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/50">
+                        {selectedSuggestion.orders.map((order) => (
+                          <tr key={order.id} className="hover:bg-muted/10">
+                            <td className="px-4 py-2 text-sm font-medium text-foreground">
+                              {order.orderNumber}
+                            </td>
+                            <td className="px-4 py-2 text-sm text-muted-foreground">
+                              {order.customerFirstName} {order.customerLastName}
+                            </td>
+                            <td className="px-4 py-2 text-xs text-muted-foreground">
+                              {order.products.map((p) => p.name).join(', ').substring(0, 30)}
+                              {order.products.map((p) => p.name).join(', ').length > 30 ? '...' : ''}
+                            </td>
+                            <td className="px-4 py-2 text-sm text-foreground text-right font-medium">
+                              {order.totalQuantity} adet
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="bg-muted/20 px-4 py-2 border-t border-border flex justify-between">
+                    <span className="text-sm text-muted-foreground">Toplam</span>
+                    <span className="text-sm font-bold text-foreground">
+                      {selectedSuggestion.totalQuantity} adet ürün
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {!selectedSuggestion && (
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">
+                    Seçili Siparişler ({formData.selectedOrderIds.length})
+                  </label>
+                  {formData.selectedOrderIds.length === 0 && (
+                    <p className="text-sm text-muted-foreground">Lütfen önce siparişleri filtreleyin veya bir öneri seçin</p>
+                  )}
+                </div>
+              )}
+
               <div className="pt-4 flex justify-end space-x-3">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={() => {
+                    setIsModalOpen(false);
+                    setSelectedSuggestion(null);
+                  }}
                   className="px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted rounded-lg transition-colors"
                 >
                   İptal
@@ -604,7 +832,7 @@ export function RoutesTable() {
                   {isSubmitting ? (
                     <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   ) : (
-                    'Oluştur'
+                    `Rota Oluştur (${formData.selectedOrderIds.length} sipariş)`
                   )}
                 </button>
               </div>

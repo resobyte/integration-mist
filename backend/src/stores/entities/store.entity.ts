@@ -25,5 +25,20 @@ export class Store extends BaseEntity {
 
   @Column({ default: true })
   isActive: boolean;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  senderName: string | null;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  senderAddress: string | null;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  senderCity: string | null;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  senderDistrict: string | null;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  senderPhone: string | null;
 }
 

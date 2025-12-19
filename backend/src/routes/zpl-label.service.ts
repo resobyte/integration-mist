@@ -1,24 +1,19 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Route } from './entities/route.entity';
 import { Order } from '../orders/entities/order.entity';
+import { Store } from '../stores/entities/store.entity';
 
 interface SenderInfo {
   name: string;
   address: string;
-  taxOffice: string;
-  taxNumber: string;
+  city: string;
+  district: string;
+  phone: string;
 }
 
 @Injectable()
 export class ZplLabelService {
   private readonly logger = new Logger(ZplLabelService.name);
-
-  private readonly defaultSender: SenderInfo = {
-    name: 'Farmakozmetika Sağlık Ürünleri ve Kozmetik Tic. Ltd. Şti.',
-    address: 'Cihangir Mahallesi Güvercin Sokak No:4 193 Numara Avcılar İstanbul',
-    taxOffice: 'Avcılar',
-    taxNumber: '3851513350',
-  };
 
   async generateZpl(route: Route): Promise<string> {
     const orderLabels = route.orders.map((order, index) => 
@@ -26,6 +21,21 @@ export class ZplLabelService {
     );
 
     return this.wrapInHtml(orderLabels);
+  }
+
+  private getSenderInfo(store: Store | null): SenderInfo {
+    return {
+      name: store?.senderName || 'Gönderen',
+      address: store?.senderAddress || '',
+      city: store?.senderCity || '',
+      district: store?.senderDistrict || '',
+      phone: store?.senderPhone || '',
+    };
+  }
+
+  private formatSenderAddress(sender: SenderInfo): string {
+    const parts = [sender.address, sender.district, sender.city].filter(Boolean);
+    return parts.join(' / ');
   }
 
   private generateOrderLabel(order: Order, index: number): string {
@@ -40,6 +50,9 @@ export class ZplLabelService {
     
     const cargoProvider = order.cargoProviderName || 'Kargo';
     const storeName = order.store?.name || 'Trendyol';
+
+    const sender = this.getSenderInfo(order.store);
+    const senderFullAddress = this.formatSenderAddress(sender);
 
     const productRows = this.generateProductRows(order);
 
@@ -71,9 +84,8 @@ export class ZplLabelService {
                       </td>
                       <td colspan="3" style="width: 45%;height: 20mm; border-top: 1px solid; vertical-align: top; font-size: 10px;">
                         <b>GÖNDEREN:</b><br>
-                        ${this.defaultSender.name}<br>
-                        ${this.defaultSender.address}<br>
-                        VD: ${this.defaultSender.taxOffice} VKN/TC: ${this.defaultSender.taxNumber}
+                        ${sender.name}<br>
+                        ${senderFullAddress}${sender.phone ? `<br>Tel: ${sender.phone}` : ''}
                       </td>
                     </tr>
                     <tr>
@@ -135,17 +147,16 @@ export class ZplLabelService {
     }
 
     return order.lines.map((line: any, idx: number) => {
-      const productCode = line.merchantSku || line.productCode || line.barcode || '-';
+      const barcode = line.barcode || line.productBarcode || '-';
       const productName = line.productName || line.name || 'Ürün';
-      const barcode = line.barcode || line.productBarcode || '';
       const quantity = line.quantity || 1;
 
       return `
         <tr>
           <td style="width:7mm;border-right:1px solid;border-bottom:1px solid;">${idx + 1}</td>
-          <td style="width:30mm;border-right:1px solid;border-bottom:1px solid;">${productCode}</td>
+          <td style="width:30mm;border-right:1px solid;border-bottom:1px solid;">${barcode}</td>
           <td style="font-size:8px;border-right:1px solid;border-bottom:1px solid;">
-            ${productName}${barcode ? ` - ${barcode}` : ''}
+            ${productName}
           </td>
           <td style="width:9mm;border-bottom:1px solid;text-align:right;">${quantity}</td>
         </tr>

@@ -7,9 +7,16 @@ import { Repository } from 'typeorm';
 import { Order, OrderStatus } from './entities/order.entity';
 import { TrendyolApiService } from './trendyol-api.service';
 import { StoresService } from '../stores/stores.service';
+import { ProductsService } from '../products/products.service';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { PaginationResponse } from '../common/interfaces/api-response.interface';
 import { OrderResponseDto } from './dto/order-response.dto';
+
+export interface SkippedOrder {
+  orderNumber: string;
+  shipmentPackageId: number;
+  missingBarcodes: string[];
+}
 
 @Injectable()
 export class OrdersService {
@@ -18,9 +25,16 @@ export class OrdersService {
     private readonly orderRepository: Repository<Order>,
     private readonly trendyolApiService: TrendyolApiService,
     private readonly storesService: StoresService,
+    private readonly productsService: ProductsService,
   ) {}
 
-  async fetchAndSaveOrders(storeId: string): Promise<{ saved: number; updated: number; errors: number }> {
+  async fetchAndSaveOrders(storeId: string): Promise<{
+    saved: number;
+    updated: number;
+    errors: number;
+    skipped: number;
+    skippedOrders: SkippedOrder[];
+  }> {
     const store = await this.storesService.findOne(storeId);
     
     if (!store.sellerId) {
@@ -32,7 +46,6 @@ export class OrdersService {
     }
 
     const params = {
-      status: 'Created',
       size: 200,
       orderByField: 'PackageLastModifiedDate',
       orderByDirection: 'DESC' as const,
@@ -43,6 +56,8 @@ export class OrdersService {
     let saved = 0;
     let updated = 0;
     let errors = 0;
+    let skipped = 0;
+    const skippedOrders: SkippedOrder[] = [];
 
     while (page < totalPages) {
       try {
@@ -57,6 +72,23 @@ export class OrdersService {
 
         for (const trendyolOrder of response.content) {
           try {
+            const orderBarcodes = this.extractBarcodesFromLines(trendyolOrder.lines);
+            
+            if (orderBarcodes.length > 0) {
+              const existingBarcodes = await this.productsService.getExistingBarcodes(orderBarcodes);
+              const missingBarcodes = orderBarcodes.filter((b) => !existingBarcodes.has(b));
+
+              if (missingBarcodes.length > 0) {
+                skipped++;
+                skippedOrders.push({
+                  orderNumber: trendyolOrder.orderNumber,
+                  shipmentPackageId: trendyolOrder.shipmentPackageId,
+                  missingBarcodes,
+                });
+                continue;
+              }
+            }
+
             const existingOrder = await this.orderRepository.findOne({
               where: { shipmentPackageId: trendyolOrder.shipmentPackageId },
             });
@@ -112,7 +144,17 @@ export class OrdersService {
       }
     }
 
-    return { saved, updated, errors };
+    return { saved, updated, errors, skipped, skippedOrders };
+  }
+
+  private extractBarcodesFromLines(lines: Record<string, unknown>[] | undefined): string[] {
+    if (!lines || !Array.isArray(lines)) {
+      return [];
+    }
+
+    return lines
+      .map((line: any) => line.barcode || line.productBarcode)
+      .filter((barcode): barcode is string => Boolean(barcode));
   }
 
   private mapTrendyolStatusToOrderStatus(trendyolStatus: string): OrderStatus {
@@ -212,6 +254,8 @@ export class OrdersService {
       saved: number;
       updated: number;
       errors: number;
+      skipped: number;
+      skippedOrders: SkippedOrder[];
       error?: string;
     }>;
   }> {
@@ -234,6 +278,8 @@ export class OrdersService {
           saved: result.saved,
           updated: result.updated,
           errors: result.errors,
+          skipped: result.skipped,
+          skippedOrders: result.skippedOrders,
         });
       } catch (error) {
         results.push({
@@ -242,6 +288,8 @@ export class OrdersService {
           saved: 0,
           updated: 0,
           errors: 1,
+          skipped: 0,
+          skippedOrders: [],
           error: error instanceof Error ? error.message : 'Unknown error',
         });
       }

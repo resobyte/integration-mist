@@ -99,7 +99,7 @@ export class TrendyolApiService {
         headers: {
           'Authorization': authToken,
           'Content-Type': 'application/json',
-          'Accept-Encoding': 'gzip, deflate, br',
+          'Accept-Encoding': 'gzip, deflate, bör',
           'User-Agent': userAgent,
         },
         maxRedirects: 0,

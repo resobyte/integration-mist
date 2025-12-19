@@ -7,6 +7,7 @@ export enum RouteStatus {
   COLLECTING = 'COLLECTING',
   READY = 'READY',
   COMPLETED = 'COMPLETED',
+  CANCELLED = 'CANCELLED',
 }
 
 @Entity('routes')

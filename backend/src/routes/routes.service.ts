@@ -53,7 +53,6 @@ export class RoutesService {
 
     for (const order of orders) {
       const routeOrder = this.routeOrderRepository.create({
-        id: randomUUID(),
         routeId: savedRoute.id,
         orderId: order.id,
       });
@@ -203,6 +202,10 @@ export class RoutesService {
       throw new NotFoundException('Route not found');
     }
 
+    if (route.status === RouteStatus.COMPLETED) {
+      throw new BadRequestException('Tamamlanmış rota silinemez');
+    }
+
     for (const order of route.orders) {
       if (order.status === OrderStatus.COLLECTING) {
         await this.orderRepository.update(order.id, {
@@ -211,7 +214,246 @@ export class RoutesService {
       }
     }
 
-    await this.routeRepository.softDelete(id);
+    await this.routeRepository.update(id, { status: RouteStatus.CANCELLED });
   }
+
+  // TODO: Sipariş durumuna göre filtreleme eklenecek (COLLECTING, PACKED, SHIPPED, DELIVERED, CANCELLED hariç tutulacak)
+  async getRouteSuggestions(storeId?: string): Promise<RouteSuggestion[]> {
+    const queryBuilder = this.orderRepository
+      .createQueryBuilder('order')
+      .leftJoinAndSelect('order.store', 'store');
+
+    if (storeId) {
+      queryBuilder.andWhere('order.storeId = :storeId', { storeId });
+    }
+
+    const orders = await queryBuilder.getMany();
+
+    if (orders.length === 0) {
+      return [];
+    }
+
+    const suggestions: RouteSuggestion[] = [];
+
+    const ordersByStore: Map<string, { storeName: string; orders: Order[] }> = new Map();
+
+    for (const order of orders) {
+      const storeKey = order.store?.id || 'no-store';
+      const storeName = order.store?.name || 'Mağazasız';
+
+      if (!ordersByStore.has(storeKey)) {
+        ordersByStore.set(storeKey, { storeName, orders: [] });
+      }
+      ordersByStore.get(storeKey)!.orders.push(order);
+    }
+
+    for (const [storeKey, storeData] of ordersByStore) {
+      const { storeName, orders: storeOrders } = storeData;
+
+      const singleProductByQuantity: Map<number, OrderWithProductInfo[]> = new Map();
+      const mixedByQuantity: Map<number, OrderWithProductInfo[]> = new Map();
+
+      for (const order of storeOrders) {
+        const lines = order.lines as any[] | null;
+        if (!lines || lines.length === 0) continue;
+
+        const uniqueBarcodes = new Set<string>();
+        const productInfos: ProductInfo[] = [];
+
+        for (const line of lines) {
+          const barcode = line.barcode || line.productBarcode;
+          if (barcode) {
+            uniqueBarcodes.add(barcode);
+            productInfos.push({
+              barcode,
+              name: line.productName || line.name || 'Bilinmeyen Ürün',
+              quantity: line.quantity || 1,
+            });
+          }
+        }
+
+        const totalQuantity = productInfos.reduce((sum, p) => sum + p.quantity, 0);
+
+        const orderInfo: OrderWithProductInfo = {
+          id: order.id,
+          orderNumber: order.orderNumber,
+          store: order.store ? { id: order.store.id, name: order.store.name } : null,
+          customerFirstName: order.customerFirstName,
+          customerLastName: order.customerLastName,
+          products: productInfos,
+          uniqueProductCount: uniqueBarcodes.size,
+          totalQuantity,
+        };
+
+        if (uniqueBarcodes.size === 1) {
+          if (!singleProductByQuantity.has(totalQuantity)) {
+            singleProductByQuantity.set(totalQuantity, []);
+          }
+          singleProductByQuantity.get(totalQuantity)!.push(orderInfo);
+        } else if (uniqueBarcodes.size > 1) {
+          if (!mixedByQuantity.has(totalQuantity)) {
+            mixedByQuantity.set(totalQuantity, []);
+          }
+          mixedByQuantity.get(totalQuantity)!.push(orderInfo);
+        }
+      }
+
+      const sortedQuantities = Array.from(singleProductByQuantity.keys()).sort((a, b) => a - b);
+
+      for (const quantity of sortedQuantities) {
+        const orderList = singleProductByQuantity.get(quantity)!;
+        if (orderList.length > 0) {
+          const productCounts: Map<string, { name: string; count: number; quantity: number }> = new Map();
+
+          for (const order of orderList) {
+            for (const product of order.products) {
+              const existing = productCounts.get(product.barcode) || { name: product.name, count: 0, quantity: 0 };
+              existing.count++;
+              existing.quantity += product.quantity;
+              productCounts.set(product.barcode, existing);
+            }
+          }
+
+          const totalQty = orderList.reduce((sum, o) => sum + o.totalQuantity, 0);
+          const productNames = Array.from(productCounts.values()).map(p => p.name);
+
+          suggestions.push({
+            id: `${storeKey}-single-qty-${quantity}`,
+            type: 'single_product',
+            name: `Tek Ürün - ${quantity} Adet`,
+            description: `${storeName} • ${orderList.length} sipariş • ${productNames.slice(0, 2).join(', ')}${productNames.length > 2 ? ` +${productNames.length - 2}` : ''}`,
+            storeName,
+            storeId: storeKey !== 'no-store' ? storeKey : undefined,
+            orderCount: orderList.length,
+            totalQuantity: totalQty,
+            products: Array.from(productCounts.entries()).map(([bc, info]) => ({
+              barcode: bc,
+              name: info.name,
+              orderCount: info.count,
+              totalQuantity: info.quantity,
+            })),
+            orders: orderList,
+            priority: orderList.length * 10 + (10 - quantity),
+          });
+        }
+      }
+
+      const sortedMixedQuantities = Array.from(mixedByQuantity.keys()).sort((a, b) => a - b);
+
+      for (const quantity of sortedMixedQuantities) {
+        const orderList = mixedByQuantity.get(quantity)!;
+        if (orderList.length > 0) {
+          const productCounts: Map<string, { name: string; count: number; quantity: number }> = new Map();
+
+          for (const order of orderList) {
+            for (const product of order.products) {
+              const existing = productCounts.get(product.barcode) || { name: product.name, count: 0, quantity: 0 };
+              existing.count++;
+              existing.quantity += product.quantity;
+              productCounts.set(product.barcode, existing);
+            }
+          }
+
+          const totalQty = orderList.reduce((sum, o) => sum + o.totalQuantity, 0);
+
+          suggestions.push({
+            id: `${storeKey}-mixed-qty-${quantity}`,
+            type: 'mixed',
+            name: `Karışık - ${quantity} Adet`,
+            description: `${storeName} • ${orderList.length} sipariş, birden fazla ürün türü`,
+            storeName,
+            storeId: storeKey !== 'no-store' ? storeKey : undefined,
+            orderCount: orderList.length,
+            totalQuantity: totalQty,
+            products: Array.from(productCounts.entries()).map(([bc, info]) => ({
+              barcode: bc,
+              name: info.name,
+              orderCount: info.count,
+              totalQuantity: info.quantity,
+            })),
+            orders: orderList,
+            priority: orderList.length * 5,
+          });
+        }
+      }
+
+      const allSingleOrders = Array.from(singleProductByQuantity.values()).flat();
+      if (allSingleOrders.length > 1) {
+        const productCounts: Map<string, { name: string; count: number; quantity: number }> = new Map();
+
+        for (const order of allSingleOrders) {
+          for (const product of order.products) {
+            const existing = productCounts.get(product.barcode) || { name: product.name, count: 0, quantity: 0 };
+            existing.count++;
+            existing.quantity += product.quantity;
+            productCounts.set(product.barcode, existing);
+          }
+        }
+
+        const totalQuantity = allSingleOrders.reduce((sum, o) => sum + o.totalQuantity, 0);
+
+        suggestions.push({
+          id: `${storeKey}-all-singles`,
+          type: 'all_singles',
+          name: `Tüm Tek Ürünlüler`,
+          description: `${storeName} • ${allSingleOrders.length} sipariş, farklı adetler`,
+          storeName,
+          storeId: storeKey !== 'no-store' ? storeKey : undefined,
+          orderCount: allSingleOrders.length,
+          totalQuantity,
+          products: Array.from(productCounts.entries()).map(([bc, info]) => ({
+            barcode: bc,
+            name: info.name,
+            orderCount: info.count,
+            totalQuantity: info.quantity,
+          })),
+          orders: allSingleOrders,
+          priority: 100,
+        });
+      }
+    }
+
+    suggestions.sort((a, b) => b.priority - a.priority);
+
+    return suggestions;
+  }
+}
+
+interface ProductInfo {
+  barcode: string;
+  name: string;
+  quantity: number;
+}
+
+interface OrderWithProductInfo {
+  id: string;
+  orderNumber: string;
+  store: { id: string; name: string } | null;
+  customerFirstName: string | null;
+  customerLastName: string | null;
+  products: ProductInfo[];
+  uniqueProductCount: number;
+  totalQuantity: number;
+}
+
+interface RouteSuggestionProduct {
+  barcode: string;
+  name: string;
+  orderCount: number;
+  totalQuantity: number;
+}
+
+export interface RouteSuggestion {
+  id: string;
+  type: 'single_product' | 'mixed' | 'all_singles';
+  name: string;
+  description: string;
+  storeName?: string;
+  storeId?: string;
+  orderCount: number;
+  totalQuantity: number;
+  products: RouteSuggestionProduct[];
+  orders: OrderWithProductInfo[];
+  priority: number;
 }
 

@@ -7,12 +7,14 @@ import { OrdersCronService } from './orders-cron.service';
 import { TrendyolApiService } from './trendyol-api.service';
 import { Order } from './entities/order.entity';
 import { StoresModule } from '../stores/stores.module';
+import { ProductsModule } from '../products/products.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Order]),
     ScheduleModule.forRoot(),
     StoresModule,
+    ProductsModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService, OrdersCronService, TrendyolApiService],

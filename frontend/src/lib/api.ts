@@ -44,7 +44,7 @@ function buildUrl(endpoint: string, params?: Record<string, string | number | st
             url.searchParams.append(key, String(item));
           });
         } else {
-          url.searchParams.append(key, String(value));
+        url.searchParams.append(key, String(value));
         }
       }
     });

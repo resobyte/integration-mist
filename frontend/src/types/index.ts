@@ -14,6 +14,14 @@ export interface User {
   updatedAt: string;
 }
 
+export interface AuthUser {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  role: Role;
+}
+
 export interface Store {
   id: string;
   name: string;
@@ -23,6 +31,11 @@ export interface Store {
   token: string | null;
   description: string | null;
   isActive: boolean;
+  senderName: string | null;
+  senderAddress: string | null;
+  senderCity: string | null;
+  senderDistrict: string | null;
+  senderPhone: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -36,10 +49,19 @@ export interface Product {
   stock: number;
   purchasePrice: number | null;
   salePrice: number | null;
+  listPrice: number | null;
   taxRate: number;
   description: string | null;
   sku: string | null;
   isActive: boolean;
+  trendyolProductId: string | null;
+  trendyolProductCode: number | null;
+  brand: string | null;
+  categoryName: string | null;
+  color: string | null;
+  size: string | null;
+  imageUrl: string | null;
+  productUrl: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -93,6 +115,7 @@ export enum RouteStatus {
   COLLECTING = 'COLLECTING',
   READY = 'READY',
   COMPLETED = 'COMPLETED',
+  CANCELLED = 'CANCELLED',
 }
 
 export interface Route {
@@ -132,4 +155,91 @@ export interface RouteConfig {
   icon: string;
   roles: Role[];
   showInSidebar: boolean;
+}
+
+export interface ApiResponse<T> {
+  success: boolean;
+  data: T;
+  message?: string;
+}
+
+export interface ErrorResponse {
+  success: boolean;
+  message: string;
+  error?: string;
+  statusCode: number;
+}
+
+export interface PaginationResponse<T> {
+  success: boolean;
+  data: T[];
+  meta: PaginationMeta;
+}
+
+export enum ClaimStatus {
+  CREATED = 'Created',
+  WAITING_IN_ACTION = 'WaitingInAction',
+  WAITING_FRAUD_CHECK = 'WaitingFraudCheck',
+  ACCEPTED = 'Accepted',
+  CANCELLED = 'Cancelled',
+  REJECTED = 'Rejected',
+  UNRESOLVED = 'Unresolved',
+  IN_ANALYSIS = 'InAnalysis',
+}
+
+export interface Claim {
+  id: string;
+  storeId: string;
+  storeName: string | null;
+  claimId: string;
+  orderNumber: string;
+  orderDate: number | string | null;
+  claimDate: number | string | null;
+  customerFirstName: string | null;
+  customerLastName: string | null;
+  cargoTrackingNumber: string | null;
+  cargoTrackingLink: string | null;
+  cargoSenderNumber: string | null;
+  cargoProviderName: string | null;
+  orderShipmentPackageId: number | string | null;
+  status: ClaimStatus;
+  items: Record<string, unknown>[] | null;
+  rejectedPackageInfo: Record<string, unknown> | null;
+  replacementOutboundPackageInfo: Record<string, unknown> | null;
+  lastModifiedDate: number | string | null;
+  orderOutboundPackageId: number | string | null;
+  isApproved: boolean;
+  approvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Question {
+  id: string;
+  storeId: string;
+  storeName: string;
+  questionId: number;
+  customerId: number;
+  customerName: string;
+  productName: string;
+  productMainId: string;
+  productImageUrl: string;
+  questionText: string;
+  status: string;
+  creationDate: number;
+  answeredDateMessage: string;
+  answer: {
+    creationDate: number;
+    text: string;
+    hasPrivateInfo: boolean;
+  } | null;
+  rejectedAnswer: {
+    creationDate: number;
+    text: string;
+    reason: string;
+  } | null;
+  rejectedDate: number | null;
+  webUrl: string;
+  isPublic: boolean;
+  showUserName: boolean;
 }

@@ -14,6 +14,11 @@ interface StoreFormData {
   apiSecret: string;
   description: string;
   isActive: boolean;
+  senderName: string;
+  senderAddress: string;
+  senderCity: string;
+  senderDistrict: string;
+  senderPhone: string;
 }
 
 const initialFormData: StoreFormData = {
@@ -23,6 +28,11 @@ const initialFormData: StoreFormData = {
   apiSecret: '',
   description: '',
   isActive: true,
+  senderName: '',
+  senderAddress: '',
+  senderCity: '',
+  senderDistrict: '',
+  senderPhone: '',
 };
 
 export function StoresTable() {
@@ -101,6 +111,11 @@ export function StoresTable() {
       apiSecret: store.apiSecret ? '****' : '',
       description: store.description || '',
       isActive: store.isActive,
+      senderName: store.senderName || '',
+      senderAddress: store.senderAddress || '',
+      senderCity: store.senderCity || '',
+      senderDistrict: store.senderDistrict || '',
+      senderPhone: store.senderPhone || '',
     });
     setFormError('');
     setIsModalOpen(true);
@@ -127,6 +142,11 @@ export function StoresTable() {
       }
       
       if (!payload.description) delete payload.description;
+      if (!payload.senderName) delete payload.senderName;
+      if (!payload.senderAddress) delete payload.senderAddress;
+      if (!payload.senderCity) delete payload.senderCity;
+      if (!payload.senderDistrict) delete payload.senderDistrict;
+      if (!payload.senderPhone) delete payload.senderPhone;
 
       if (editingStore) {
         await apiPatch(`/stores/${editingStore.id}`, payload);
@@ -442,6 +462,64 @@ export function StoresTable() {
                   <option value="Aktif">Aktif</option>
                   <option value="Pasif">Pasif</option>
                 </select>
+              </div>
+
+              <div className="pt-4 border-t border-border">
+                <h4 className="text-sm font-semibold text-foreground mb-3">Gönderen Bilgileri</h4>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">Gönderen Adı</label>
+                    <input
+                      type="text"
+                      value={formData.senderName}
+                      onChange={(e) => setFormData({ ...formData, senderName: e.target.value })}
+                      className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-muted/20"
+                      placeholder="Şirket veya kişi adı"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">Gönderen Adresi</label>
+                    <textarea
+                      value={formData.senderAddress}
+                      onChange={(e) => setFormData({ ...formData, senderAddress: e.target.value })}
+                      className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-muted/20"
+                      rows={2}
+                      placeholder="Açık adres"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1">İl</label>
+                      <input
+                        type="text"
+                        value={formData.senderCity}
+                        onChange={(e) => setFormData({ ...formData, senderCity: e.target.value })}
+                        className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-muted/20"
+                        placeholder="İstanbul"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1">İlçe</label>
+                      <input
+                        type="text"
+                        value={formData.senderDistrict}
+                        onChange={(e) => setFormData({ ...formData, senderDistrict: e.target.value })}
+                        className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-muted/20"
+                        placeholder="Kadıköy"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">Telefon</label>
+                    <input
+                      type="text"
+                      value={formData.senderPhone}
+                      onChange={(e) => setFormData({ ...formData, senderPhone: e.target.value })}
+                      className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-muted/20"
+                      placeholder="05XX XXX XX XX"
+                    />
+                  </div>
+                </div>
               </div>
               {formError && (
                 <div className="p-3 bg-destructive/10 text-destructive text-sm rounded-lg border border-destructive/20">

@@ -8,6 +8,8 @@ import { StoresModule } from './stores/stores.module';
 import { ProductsModule } from './products/products.module';
 import { OrdersModule } from './orders/orders.module';
 import { RoutesModule } from './routes/routes.module';
+import { ClaimsModule } from './claims/claims.module';
+import { QuestionsModule } from './questions/questions.module';
 import { SeedService } from './database/seed.service';
 import { User } from './users/entities/user.entity';
 
@@ -40,6 +42,8 @@ import { User } from './users/entities/user.entity';
     ProductsModule,
     OrdersModule,
     RoutesModule,
+    ClaimsModule,
+    QuestionsModule,
   ],
   providers: [SeedService],
 })

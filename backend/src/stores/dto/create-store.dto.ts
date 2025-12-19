@@ -38,5 +38,30 @@ export class CreateStoreDto {
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(255)
+  senderName?: string;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(500)
+  senderAddress?: string;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(100)
+  senderCity?: string;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(100)
+  senderDistrict?: string;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(20)
+  senderPhone?: string;
 }
 

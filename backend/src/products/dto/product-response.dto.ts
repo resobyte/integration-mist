@@ -10,10 +10,19 @@ export class ProductResponseDto {
   stock: number;
   purchasePrice: number | null;
   salePrice: number | null;
+  listPrice: number | null;
   taxRate: number;
   description: string | null;
   sku: string | null;
   isActive: boolean;
+  trendyolProductId: string | null;
+  trendyolProductCode: number | null;
+  brand: string | null;
+  categoryName: string | null;
+  color: string | null;
+  size: string | null;
+  imageUrl: string | null;
+  productUrl: string | null;
   createdAt: Date;
   updatedAt: Date;
 
@@ -26,10 +35,19 @@ export class ProductResponseDto {
     dto.stock = entity.stock;
     dto.purchasePrice = entity.purchasePrice;
     dto.salePrice = entity.salePrice;
+    dto.listPrice = entity.listPrice;
     dto.taxRate = entity.taxRate;
     dto.description = entity.description;
     dto.sku = entity.sku;
     dto.isActive = entity.isActive;
+    dto.trendyolProductId = entity.trendyolProductId;
+    dto.trendyolProductCode = entity.trendyolProductCode;
+    dto.brand = entity.brand;
+    dto.categoryName = entity.categoryName;
+    dto.color = entity.color;
+    dto.size = entity.size;
+    dto.imageUrl = entity.imageUrl;
+    dto.productUrl = entity.productUrl;
     dto.createdAt = entity.createdAt;
     dto.updatedAt = entity.updatedAt;
     

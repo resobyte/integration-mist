@@ -9,6 +9,11 @@ export class StoreResponseDto {
   token: string | null;
   description: string | null;
   isActive: boolean;
+  senderName: string | null;
+  senderAddress: string | null;
+  senderCity: string | null;
+  senderDistrict: string | null;
+  senderPhone: string | null;
   createdAt: Date;
   updatedAt: Date;
 
@@ -22,6 +27,11 @@ export class StoreResponseDto {
     dto.token = entity.token;
     dto.description = entity.description;
     dto.isActive = entity.isActive;
+    dto.senderName = entity.senderName;
+    dto.senderAddress = entity.senderAddress;
+    dto.senderCity = entity.senderCity;
+    dto.senderDistrict = entity.senderDistrict;
+    dto.senderPhone = entity.senderPhone;
     dto.createdAt = entity.createdAt;
     dto.updatedAt = entity.updatedAt;
     return dto;

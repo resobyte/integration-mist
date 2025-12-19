@@ -54,6 +54,11 @@ export class RoutesController {
     return this.routesService.getFilteredOrders(filter);
   }
 
+  @Get('suggestions')
+  getRouteSuggestions(@Query('storeId') storeId?: string) {
+    return this.routesService.getRouteSuggestions(storeId);
+  }
+
   @Get(':id')
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.routesService.findOne(id);

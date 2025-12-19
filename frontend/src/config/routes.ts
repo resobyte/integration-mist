@@ -37,6 +37,20 @@ export const routes: RouteConfig[] = [
         showInSidebar: true,
       },
       {
+        path: '/claims',
+        label: 'İade Yönetimi',
+        icon: 'claims',
+        roles: [Role.PLATFORM_OWNER, Role.OPERATION],
+        showInSidebar: true,
+      },
+      {
+        path: '/questions',
+        label: 'Müşteri Soruları',
+        icon: 'questions',
+        roles: [Role.PLATFORM_OWNER, Role.OPERATION],
+        showInSidebar: true,
+      },
+      {
         path: '/users',
     label: 'Kullanıcılar',
     icon: 'users',

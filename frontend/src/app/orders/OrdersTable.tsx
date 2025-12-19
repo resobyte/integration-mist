@@ -18,6 +18,23 @@ interface OrderLine {
   [key: string]: unknown;
 }
 
+interface SkippedOrder {
+  orderNumber: string;
+  shipmentPackageId: number;
+  missingBarcodes: string[];
+}
+
+interface FetchResult {
+  storeId: string;
+  storeName: string;
+  saved: number;
+  updated: number;
+  errors: number;
+  skipped: number;
+  skippedOrders: SkippedOrder[];
+  error?: string;
+}
+
 export function OrdersTable() {
   const { showSuccess, showDanger } = useToast();
   const [orders, setOrders] = useState<Order[]>([]);
@@ -32,6 +49,9 @@ export function OrdersTable() {
   const [selectedStoreId, setSelectedStoreId] = useState<string>('');
   const [selectedStatus, setSelectedStatus] = useState<OrderStatus | ''>('');
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [showSkippedModal, setShowSkippedModal] = useState(false);
+  const [fetchResults, setFetchResults] = useState<FetchResult[]>([]);
+  const [pageSize, setPageSize] = useState(10);
 
   const fetchStores = useCallback(async () => {
     try {
@@ -53,7 +73,7 @@ export function OrdersTable() {
     try {
       const params: Record<string, string | number> = {
         page: currentPage,
-        limit: 10,
+        limit: pageSize,
         sortBy: sortConfig.sortBy,
         sortOrder: sortConfig.sortOrder,
       };
@@ -76,7 +96,7 @@ export function OrdersTable() {
     } finally {
       setIsLoading(false);
     }
-  }, [currentPage, sortConfig, selectedStoreId, selectedStatus]);
+  }, [currentPage, sortConfig, selectedStoreId, selectedStatus, pageSize]);
 
   useEffect(() => {
     fetchOrders();
@@ -89,8 +109,32 @@ export function OrdersTable() {
   const handleFetchOrders = async (storeId: string) => {
     setIsFetching(true);
     try {
-      await apiPost(`/orders/fetch/${storeId}`, {});
-      showSuccess('Siparişler başarıyla çekildi');
+      const response = await apiPost<{
+        saved: number;
+        updated: number;
+        errors: number;
+        skipped: number;
+        skippedOrders: SkippedOrder[];
+      }>(`/orders/fetch/${storeId}`, {});
+
+      const result = response.data;
+      const store = stores.find((s) => s.id === storeId);
+
+      if (result.skipped > 0) {
+        setFetchResults([{
+          storeId,
+          storeName: store?.name || 'Bilinmeyen Mağaza',
+          saved: result.saved,
+          updated: result.updated,
+          errors: result.errors,
+          skipped: result.skipped,
+          skippedOrders: result.skippedOrders,
+        }]);
+        setShowSkippedModal(true);
+        showSuccess(`${result.saved} sipariş eklendi, ${result.updated} güncellendi, ${result.skipped} atlanan sipariş var (eksik ürün)`);
+      } else {
+        showSuccess(`${result.saved} sipariş eklendi, ${result.updated} güncellendi`);
+      }
       fetchOrders();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Siparişler çekilirken hata oluştu';
@@ -103,8 +147,24 @@ export function OrdersTable() {
   const handleFetchAllOrders = async () => {
     setIsFetchingAll(true);
     try {
-      const response = await apiPost('/orders/fetch-all', {});
-      showSuccess(`Tüm mağazalardan siparişler çekildi. ${response.data.totalStores} mağaza işlendi.`);
+      const response = await apiPost<{
+        totalStores: number;
+        results: FetchResult[];
+      }>('/orders/fetch-all', {});
+
+      const { results } = response.data;
+      const hasSkipped = results.some((r) => r.skipped > 0);
+      const totalSaved = results.reduce((sum, r) => sum + r.saved, 0);
+      const totalUpdated = results.reduce((sum, r) => sum + r.updated, 0);
+      const totalSkipped = results.reduce((sum, r) => sum + r.skipped, 0);
+
+      if (hasSkipped) {
+        setFetchResults(results.filter((r) => r.skipped > 0));
+        setShowSkippedModal(true);
+        showSuccess(`${response.data.totalStores} mağaza işlendi: ${totalSaved} eklendi, ${totalUpdated} güncellendi, ${totalSkipped} atlandı (eksik ürün)`);
+      } else {
+        showSuccess(`${response.data.totalStores} mağaza işlendi: ${totalSaved} eklendi, ${totalUpdated} güncellendi`);
+      }
       fetchOrders();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Siparişler çekilirken hata oluştu';
@@ -492,32 +552,152 @@ export function OrdersTable() {
           </table>
         </div>
 
-        {pagination && pagination.totalPages > 1 && (
-          <div className="flex items-center justify-between px-6 py-4 border-t border-border bg-muted/10">
-            <div className="text-sm text-muted-foreground">
-              {((pagination.page - 1) * pagination.limit) + 1} -{' '}
-              {Math.min(pagination.page * pagination.limit, pagination.total)} /{' '}
-              {pagination.total} sonuç gösteriliyor
+        {pagination && (
+          <div className="flex items-center justify-between px-6 py-4 border-t border-border bg-muted/10 flex-wrap gap-4">
+            <div className="flex items-center gap-4">
+              <div className="text-sm text-muted-foreground">
+                {pagination.total > 0 ? (
+                  <>
+                    {((pagination.page - 1) * pagination.limit) + 1} -{' '}
+                    {Math.min(pagination.page * pagination.limit, pagination.total)} /{' '}
+                    {pagination.total} sonuç
+                  </>
+                ) : (
+                  '0 sonuç'
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Sayfa başına:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
+                  className="px-2 py-1 text-sm border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-muted/20"
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setCurrentPage(p => p - 1)}
-                disabled={pagination.page <= 1}
-                className="px-4 py-2 text-sm font-medium border border-input rounded-lg hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                Önceki
-              </button>
-              <button
-                onClick={() => setCurrentPage(p => p + 1)}
-                disabled={pagination.page >= pagination.totalPages}
-                className="px-4 py-2 text-sm font-medium border border-input rounded-lg hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                Sonraki
-              </button>
-            </div>
+            {pagination.totalPages > 1 && (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setCurrentPage(p => p - 1)}
+                  disabled={pagination.page <= 1}
+                  className="px-4 py-2 text-sm font-medium border border-input rounded-lg hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Önceki
+                </button>
+                <span className="px-3 py-2 text-sm text-muted-foreground">
+                  {pagination.page} / {pagination.totalPages}
+                </span>
+                <button
+                  onClick={() => setCurrentPage(p => p + 1)}
+                  disabled={pagination.page >= pagination.totalPages}
+                  className="px-4 py-2 text-sm font-medium border border-input rounded-lg hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Sonraki
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
+
+      {showSkippedModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-full items-center justify-center p-4">
+            <div
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+              onClick={() => setShowSkippedModal(false)}
+            />
+            <div className="relative bg-card rounded-xl border border-border shadow-xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-muted/30">
+                <div>
+                  <h3 className="text-lg font-semibold text-foreground">Atlanan Siparişler</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Aşağıdaki siparişler, sistemde kayıtlı olmayan ürünler içerdiği için atlandı.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowSkippedModal(false)}
+                  className="p-2 rounded-lg hover:bg-muted transition-colors"
+                >
+                  <svg className="w-5 h-5 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="p-6 overflow-y-auto max-h-[60vh]">
+                <div className="space-y-6">
+                  {fetchResults.map((result, idx) => (
+                    <div key={idx} className="border border-border rounded-lg overflow-hidden">
+                      <div className="px-4 py-3 bg-muted/20 border-b border-border">
+                        <h4 className="font-medium text-foreground">{result.storeName}</h4>
+                        <p className="text-sm text-muted-foreground">
+                          {result.saved} eklendi, {result.updated} güncellendi, {result.skipped} atlandı
+                        </p>
+                      </div>
+                      <div className="divide-y divide-border">
+                        {result.skippedOrders.map((order, orderIdx) => (
+                          <div key={orderIdx} className="px-4 py-3">
+                            <div className="flex items-start justify-between">
+                              <div>
+                                <span className="font-medium text-foreground">
+                                  Sipariş: {order.orderNumber}
+                                </span>
+                                <span className="text-sm text-muted-foreground ml-2">
+                                  (Paket: {order.shipmentPackageId})
+                                </span>
+                              </div>
+                            </div>
+                            <div className="mt-2">
+                              <span className="text-sm text-muted-foreground">Eksik barkodlar:</span>
+                              <div className="flex flex-wrap gap-2 mt-1">
+                                {order.missingBarcodes.map((barcode, barcodeIdx) => (
+                                  <span
+                                    key={barcodeIdx}
+                                    className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-mono font-medium bg-destructive/10 text-destructive border border-destructive/20"
+                                  >
+                                    {barcode}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-6 p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                  <div className="flex items-start">
+                    <svg className="w-5 h-5 text-amber-600 mt-0.5 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <div>
+                      <h5 className="font-medium text-amber-700">Ürünleri Ekleyin</h5>
+                      <p className="text-sm text-amber-600 mt-1">
+                        Bu siparişlerin kaydedilmesi için önce eksik barkodlara sahip ürünleri <strong>Ürünler</strong> sayfasından eklemeniz gerekiyor.
+                        Ürünler eklendikten sonra siparişleri tekrar çektiğinizde otomatik olarak kaydedilecektir.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="flex justify-end px-6 py-4 border-t border-border bg-muted/10">
+                <button
+                  onClick={() => setShowSkippedModal(false)}
+                  className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg shadow-md transition-all"
+                >
+                  Anladım
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

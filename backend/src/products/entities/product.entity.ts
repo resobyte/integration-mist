@@ -11,11 +11,10 @@ export class Product extends BaseEntity {
   @Column({ type: 'varchar', length: 36 })
   storeId: string;
 
-  @Index({ unique: true })
   @Column({ length: 255 })
   name: string;
 
-  @Index({ unique: true })
+  @Index()
   @Column({ type: 'varchar', length: 100, nullable: true })
   barcode: string | null;
 
@@ -34,10 +33,41 @@ export class Product extends BaseEntity {
   @Column({ type: 'text', nullable: true })
   description: string | null;
 
-  @Column({ type: 'varchar', length: 50, nullable: true })
+  @Column({ type: 'varchar', length: 100, nullable: true })
   sku: string | null;
 
   @Column({ default: true })
   isActive: boolean;
+
+  @Index()
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  trendyolProductId: string | null;
+
+  @Column({ type: 'bigint', nullable: true })
+  trendyolProductCode: number | null;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  brand: string | null;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  categoryName: string | null;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  color: string | null;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  size: string | null;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  listPrice: number | null;
+
+  @Column({ type: 'text', nullable: true })
+  imageUrl: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  productUrl: string | null;
+
+  @Column({ type: 'bigint', nullable: true })
+  trendyolLastUpdateDate: number | null;
 }
 

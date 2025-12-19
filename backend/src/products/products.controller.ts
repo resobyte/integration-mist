@@ -2,18 +2,15 @@ import {
   Controller,
   Get,
   Post,
-  Body,
-  Patch,
   Param,
-  Delete,
   Query,
   UseGuards,
   ParseUUIDPipe,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { ProductsService } from './products.service';
-import { CreateProductDto } from './dto/create-product.dto';
-import { UpdateProductDto } from './dto/update-product.dto';
-import { PaginationDto } from '../common/dto/pagination.dto';
+import { ProductFilterDto } from './dto/product-filter.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -25,36 +22,39 @@ import { Role } from '../common/interfaces/role.enum';
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
-  @Post()
-  create(@Body() createProductDto: CreateProductDto) {
-    return this.productsService.create(createProductDto);
+  @Post('sync/:storeId')
+  @HttpCode(HttpStatus.OK)
+  async syncProducts(@Param('storeId', ParseUUIDPipe) storeId: string) {
+    const result = await this.productsService.syncProductsFromTrendyol(storeId);
+    return {
+      success: true,
+      message: `Products synced successfully. Created: ${result.created}, Updated: ${result.updated}, Errors: ${result.errors}`,
+      data: result,
+    };
+  }
+
+  @Post('sync-all')
+  @HttpCode(HttpStatus.OK)
+  async syncAllProducts() {
+    const result = await this.productsService.syncAllStoresProducts();
+    const totalCreated = result.results.reduce((sum, r) => sum + r.created, 0);
+    const totalUpdated = result.results.reduce((sum, r) => sum + r.updated, 0);
+    return {
+      success: true,
+      message: `Products synced for all stores. Total: ${result.totalStores} stores. Created: ${totalCreated}, Updated: ${totalUpdated}`,
+      data: result,
+    };
   }
 
   @Get()
-  findAll(
-    @Query() paginationDto: PaginationDto,
-    @Query('search') search?: string,
-    @Query('storeId') storeId?: string,
-  ) {
-    return this.productsService.findAll(paginationDto, search, storeId);
+  findAll(@Query() filterDto: ProductFilterDto) {
+    const isActiveBoolean = filterDto.isActive === undefined ? undefined : filterDto.isActive === 'true';
+    return this.productsService.findAll(filterDto, filterDto.search, filterDto.storeId, isActiveBoolean);
   }
 
   @Get(':id')
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.productsService.findOne(id);
-  }
-
-  @Patch(':id')
-  update(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() updateProductDto: UpdateProductDto,
-  ) {
-    return this.productsService.update(id, updateProductDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.productsService.remove(id);
   }
 }
 

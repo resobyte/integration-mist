@@ -84,10 +84,10 @@ export function Sidebar({ routes, currentPath, isMobileMenuOpen, onMobileMenuClo
       >
         <div className={`p-4 h-16 flex items-center border-b border-border ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
           {!isCollapsed && (
-            <h1 className="text-xl font-bold font-rubik tracking-wide text-primary truncate">AdminPanel</h1>
+            <h1 className="text-xl font-bold font-rubik tracking-wide text-primary truncate">La Vielle</h1>
           )}
           {isCollapsed && (
-            <h1 className="text-xl font-bold font-rubik tracking-wide text-primary">AP</h1>
+            <h1 className="text-xl font-bold font-rubik tracking-wide text-primary">LV</h1>
           )}
           <button 
             onClick={() => setIsCollapsed(!isCollapsed)}

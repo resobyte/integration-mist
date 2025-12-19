@@ -59,6 +59,8 @@ export function RoutesTable() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const [selectedRoute, setSelectedRoute] = useState<Route | null>(null);
+  const [statusFilter, setStatusFilter] = useState<RouteStatus[]>([]);
+  const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
   const [formData, setFormData] = useState<RouteFormData>({
     name: '',
     description: '',
@@ -96,7 +98,12 @@ export function RoutesTable() {
     fetchProducts();
     fetchStores();
     fetchSuggestions();
+    fetchPendingOrdersCount();
   }, []);
+
+  useEffect(() => {
+    fetchRoutes();
+  }, [fetchRoutes]);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -112,12 +119,25 @@ export function RoutesTable() {
   const fetchRoutes = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await apiGet<Route[]>('/routes');
+      const params: any = {};
+      if (statusFilter.length > 0) {
+        params.status = statusFilter.join(',');
+      }
+      const response = await apiGet<Route[]>('/routes', { params });
       setRoutes(response.data || []);
     } catch {
       console.error('Failed to fetch routes');
     } finally {
       setIsLoading(false);
+    }
+  }, [statusFilter]);
+
+  const fetchPendingOrdersCount = useCallback(async () => {
+    try {
+      const response = await apiGet<{ count: number }>('/orders/count', { params: { status: 'PENDING' } });
+      setPendingOrdersCount(response.data?.count || 0);
+    } catch {
+      console.error('Failed to fetch pending orders count');
     }
   }, []);
 
@@ -207,6 +227,7 @@ export function RoutesTable() {
       setSelectedSuggestion(null);
       fetchRoutes();
       fetchSuggestions();
+      fetchPendingOrdersCount();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Rota oluşturulurken hata oluştu';
       showDanger(errorMessage);

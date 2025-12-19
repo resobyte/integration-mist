@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 
 interface TrendyolClaimItem {
   orderLine: {
@@ -81,7 +82,12 @@ interface GetClaimsParams {
 @Injectable()
 export class TrendyolClaimsApiService {
   private readonly logger = new Logger(TrendyolClaimsApiService.name);
-  private readonly baseUrl = 'https://apigw.trendyol.com/integration/order/sellers';
+  private readonly baseUrl: string;
+
+  constructor(private readonly configService: ConfigService) {
+    this.baseUrl = this.configService.get<string>('TRENDYOL_ORDER_API_URL') || 
+                   'https://apigw.trendyol.com/integration/order/sellers';
+  }
 
   private getAuthHeader(apiKey: string, apiSecret: string): string {
     return `Basic ${Buffer.from(`${apiKey}:${apiSecret}`).toString('base64')}`;

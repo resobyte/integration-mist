@@ -73,8 +73,15 @@ export class RoutesService {
     return RouteResponseDto.fromEntity(fullRoute!, true);
   }
 
-  async findAll(): Promise<RouteResponseDto[]> {
+  async findAll(status?: RouteStatus[]): Promise<RouteResponseDto[]> {
+    const where: any = {};
+    
+    if (status && status.length > 0) {
+      where.status = In(status);
+    }
+
     const routes = await this.routeRepository.find({
+      where,
       relations: ['orders', 'orders.store'],
       order: { createdAt: 'DESC' },
     });

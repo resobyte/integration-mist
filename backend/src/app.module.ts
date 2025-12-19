@@ -10,6 +10,7 @@ import { OrdersModule } from './orders/orders.module';
 import { RoutesModule } from './routes/routes.module';
 import { ClaimsModule } from './claims/claims.module';
 import { QuestionsModule } from './questions/questions.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { SeedService } from './database/seed.service';
 import { User } from './users/entities/user.entity';
 
@@ -44,6 +45,7 @@ import { User } from './users/entities/user.entity';
     RoutesModule,
     ClaimsModule,
     QuestionsModule,
+    DashboardModule,
   ],
   providers: [SeedService],
 })

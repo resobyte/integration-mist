@@ -4,7 +4,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Order, OrderStatus } from './entities/order.entity';
+import { Order, OrderStatus, TrendyolOrderStatus } from './entities/order.entity';
 import { TrendyolApiService } from './trendyol-api.service';
 import { StoresService } from '../stores/stores.service';
 import { ProductsService } from '../products/products.service';
@@ -49,6 +49,7 @@ export class OrdersService {
       size: 200,
       orderByField: 'PackageLastModifiedDate',
       orderByDirection: 'DESC' as const,
+      status: TrendyolOrderStatus.CREATED,
     };
 
     let page = 0;

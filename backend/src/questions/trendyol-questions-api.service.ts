@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 
 interface TrendyolQuestionAnswer {
   creationDate: number;
@@ -53,7 +54,12 @@ interface GetQuestionsParams {
 @Injectable()
 export class TrendyolQuestionsApiService {
   private readonly logger = new Logger(TrendyolQuestionsApiService.name);
-  private readonly baseUrl = 'https://apigw.trendyol.com/integration/qna/sellers';
+  private readonly baseUrl: string;
+
+  constructor(private readonly configService: ConfigService) {
+    this.baseUrl = this.configService.get<string>('TRENDYOL_QNA_API_URL') || 
+                   'https://apigw.trendyol.com/integration/qna/sellers';
+  }
 
   private getAuthHeader(apiKey: string, apiSecret: string): string {
     return `Basic ${Buffer.from(`${apiKey}:${apiSecret}`).toString('base64')}`;

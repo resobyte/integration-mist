@@ -10,7 +10,7 @@ import { TrendyolClaimsApiService } from './trendyol-claims-api.service';
   imports: [TypeOrmModule.forFeature([Claim, Store])],
   controllers: [ClaimsController],
   providers: [ClaimsService, TrendyolClaimsApiService],
-  exports: [ClaimsService],
+  exports: [ClaimsService, TrendyolClaimsApiService],
 })
 export class ClaimsModule {}
 

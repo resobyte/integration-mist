@@ -69,7 +69,7 @@ export class TrendyolApiService {
     },
   ): Promise<TrendyolOrderResponse> {
     try {
-      const baseUrl = this.configService.get<string>('TRENDYOL_API_URL') || 
+      const baseUrl = this.configService.get<string>('TRENDYOL_ORDER_API_URL') || 
                      'https://apigw.trendyol.com/integration/order/sellers';
 
       const url = `${baseUrl}/${sellerId}/orders`;

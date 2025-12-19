@@ -15,6 +15,7 @@ import { Response } from 'express';
 import { RoutesService } from './routes.service';
 import { CreateRouteDto } from './dto/create-route.dto';
 import { RouteFilterDto } from './dto/route-filter.dto';
+import { RouteStatus } from './entities/route.entity';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -32,8 +33,9 @@ export class RoutesController {
   }
 
   @Get()
-  findAll() {
-    return this.routesService.findAll();
+  findAll(@Query('status', new ParseArrayPipe({ items: String, optional: true, separator: ',' })) status?: string[]) {
+    const routeStatuses = status?.map((s) => s as RouteStatus).filter((s) => Object.values(RouteStatus).includes(s));
+    return this.routesService.findAll(routeStatuses);
   }
 
   @Get('filter-orders')

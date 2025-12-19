@@ -9,7 +9,7 @@ import { TrendyolQuestionsApiService } from './trendyol-questions-api.service';
   imports: [TypeOrmModule.forFeature([Store])],
   controllers: [QuestionsController],
   providers: [QuestionsService, TrendyolQuestionsApiService],
-  exports: [QuestionsService],
+  exports: [QuestionsService, TrendyolQuestionsApiService],
 })
 export class QuestionsModule {}
 

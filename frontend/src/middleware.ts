@@ -12,6 +12,7 @@ async function verifyToken(accessToken: string): Promise<{ role: Role } | null> 
         'Content-Type': 'application/json',
         Cookie: `access_token=${accessToken}`,
       },
+      credentials: 'include',
       cache: 'no-store',
     });
 
@@ -41,6 +42,7 @@ async function refreshTokens(refreshToken: string): Promise<RefreshResult> {
         'Content-Type': 'application/json',
         Cookie: `refresh_token=${refreshToken}`,
       },
+      credentials: 'include',
       cache: 'no-store',
     });
 
@@ -112,22 +114,25 @@ export async function middleware(request: NextRequest) {
       user = await verifyToken(accessToken);
 
       if (user) {
+        const isProduction = process.env.NODE_ENV === 'production';
+        const cookieOptions = {
+          httpOnly: true,
+          secure: isProduction,
+          sameSite: (isProduction ? 'none' : 'lax') as 'none' | 'lax',
+          path: '/',
+          ...(isProduction && { domain: '.railway.app' }),
+        };
+
         const response = NextResponse.next();
 
         response.cookies.set('access_token', refreshResult.accessToken, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'lax',
-          path: '/',
+          ...cookieOptions,
           maxAge: 15 * 60,
         });
 
         if (refreshResult.refreshToken) {
           response.cookies.set('refresh_token', refreshResult.refreshToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            path: '/',
+            ...cookieOptions,
             maxAge: 7 * 24 * 60 * 60,
           });
         }
@@ -136,18 +141,12 @@ export async function middleware(request: NextRequest) {
           const defaultRoute = getDefaultRouteByRole(user.role);
           const redirectResponse = NextResponse.redirect(new URL(defaultRoute, request.url));
           redirectResponse.cookies.set('access_token', refreshResult.accessToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            path: '/',
+            ...cookieOptions,
             maxAge: 15 * 60,
           });
           if (refreshResult.refreshToken) {
             redirectResponse.cookies.set('refresh_token', refreshResult.refreshToken, {
-              httpOnly: true,
-              secure: process.env.NODE_ENV === 'production',
-              sameSite: 'lax',
-              path: '/',
+              ...cookieOptions,
               maxAge: 7 * 24 * 60 * 60,
             });
           }

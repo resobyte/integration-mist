@@ -56,6 +56,10 @@ export function QuestionsTable() {
     try {
       await apiPost(`/questions/${question.id}/answer`, {
         text: answerText.trim(),
+      }, {
+        params: {
+          sellerId: question.sellerId,
+        },
       });
       showSuccess('Cevap başarıyla gönderildi');
       setAnswerText('');

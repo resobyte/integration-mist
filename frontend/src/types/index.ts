@@ -218,6 +218,7 @@ export interface Question {
   id: string;
   storeId: string;
   storeName: string;
+  sellerId: string;
   questionId: number;
   customerId: number;
   customerName: string;

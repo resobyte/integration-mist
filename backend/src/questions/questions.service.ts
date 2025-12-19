@@ -44,6 +44,7 @@ export class QuestionsService {
             trendyolQuestion,
             store.id,
             store.name,
+            store.sellerId!,
           );
           allQuestions.push(dto);
         }
@@ -83,39 +84,45 @@ export class QuestionsService {
   }
 
   async findOne(id: string): Promise<QuestionResponseDto> {
-    const [storeId, questionIdStr] = id.split('-', 2);
-
-    if (!storeId || !questionIdStr) {
-      throw new NotFoundException('Invalid question ID format');
-    }
-
-    const questionId = parseInt(questionIdStr, 10);
+    const questionId = parseInt(id, 10);
     if (isNaN(questionId)) {
       throw new NotFoundException('Invalid question ID');
     }
 
-    const store = await this.storeRepository.findOne({ where: { id: storeId } });
+    const stores = await this.storeRepository.find({
+      where: { isActive: true },
+    });
 
-    if (!store || !store.sellerId || !store.apiKey || !store.apiSecret) {
-      throw new NotFoundException('Store not found or credentials not configured');
-    }
-
-    const trendyolQuestion = await this.trendyolQuestionsApiService.getQuestionById(
-      store.sellerId,
-      store.apiKey,
-      store.apiSecret,
-      questionId,
+    const activeStores = stores.filter(
+      (store) => store.sellerId && store.apiKey && store.apiSecret,
     );
 
-    return QuestionResponseDto.fromTrendyolQuestion(trendyolQuestion, store.id, store.name);
+    for (const store of activeStores) {
+      try {
+        const trendyolQuestion = await this.trendyolQuestionsApiService.getQuestionById(
+          store.sellerId!,
+          store.apiKey!,
+          store.apiSecret!,
+          questionId,
+        );
+
+        if (trendyolQuestion) {
+          return QuestionResponseDto.fromTrendyolQuestion(trendyolQuestion, store.id, store.name, store.sellerId!);
+        }
+      } catch (error) {
+        continue;
+      }
+    }
+
+    throw new NotFoundException('Question not found');
   }
 
   async createAnswer(
+    sellerId: string,
     questionId: number,
-    storeId: string,
     text: string,
   ): Promise<{ success: boolean; message: string }> {
-    const store = await this.storeRepository.findOne({ where: { id: storeId } });
+    const store = await this.storeRepository.findOne({ where: { sellerId } });
 
     if (!store) {
       throw new NotFoundException('Store not found');
@@ -130,7 +137,7 @@ export class QuestionsService {
     }
 
     await this.trendyolQuestionsApiService.createAnswer(
-      store.sellerId,
+      sellerId,
       store.apiKey,
       store.apiSecret,
       questionId,

@@ -2,6 +2,7 @@ export class QuestionResponseDto {
   id: string;
   storeId: string;
   storeName: string;
+  sellerId: string;
   questionId: number;
   customerId: number;
   customerName: string;
@@ -27,11 +28,12 @@ export class QuestionResponseDto {
   isPublic: boolean;
   showUserName: boolean;
 
-  static fromTrendyolQuestion(question: any, storeId: string, storeName: string): QuestionResponseDto {
+  static fromTrendyolQuestion(question: any, storeId: string, storeName: string, sellerId: string): QuestionResponseDto {
     const dto = new QuestionResponseDto();
-    dto.id = `${storeId}-${question.id}`;
+    dto.id = question.id.toString();
     dto.storeId = storeId;
     dto.storeName = storeName;
+    dto.sellerId = sellerId;
     dto.questionId = question.id;
     dto.customerId = question.customerId;
     dto.customerName = question.userName || 'Anonim';

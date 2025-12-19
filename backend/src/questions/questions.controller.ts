@@ -23,6 +23,34 @@ export class QuestionsController {
     };
   }
 
+  @Post(':id/answer')
+  @Roles(Role.PLATFORM_OWNER, Role.OPERATION)
+  async createAnswer(
+    @Param('id') id: string,
+    @Query('sellerId') sellerId: string,
+    @Body() createAnswerDto: CreateAnswerDto,
+  ) {
+    const questionId = parseInt(id, 10);
+    if (isNaN(questionId)) {
+      throw new BadRequestException('Invalid question ID');
+    }
+
+    if (!sellerId) {
+      throw new BadRequestException('sellerId is required');
+    }
+
+    const result = await this.questionsService.createAnswer(
+      sellerId,
+      questionId,
+      createAnswerDto.text,
+    );
+
+    return {
+      success: result.success,
+      message: result.message,
+    };
+  }
+
   @Get(':id')
   @Roles(Role.PLATFORM_OWNER, Role.OPERATION)
   async findOne(@Param('id') id: string) {
@@ -30,35 +58,6 @@ export class QuestionsController {
     return {
       success: true,
       data: question,
-    };
-  }
-
-  @Post(':id/answer')
-  @Roles(Role.PLATFORM_OWNER, Role.OPERATION)
-  async createAnswer(
-    @Param('id') id: string,
-    @Body() createAnswerDto: CreateAnswerDto,
-  ) {
-    const [storeId, questionIdStr] = id.split('-', 2);
-
-    if (!storeId || !questionIdStr) {
-      throw new BadRequestException('Invalid question ID format');
-    }
-
-    const questionId = parseInt(questionIdStr, 10);
-    if (isNaN(questionId)) {
-      throw new BadRequestException('Invalid question ID');
-    }
-
-    const result = await this.questionsService.createAnswer(
-      questionId,
-      storeId,
-      createAnswerDto.text,
-    );
-
-    return {
-      success: result.success,
-      message: result.message,
     };
   }
 }

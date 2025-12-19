@@ -61,12 +61,8 @@ export class RoutesController {
     return this.routesService.getRouteSuggestions(storeId);
   }
 
-  @Get(':id')
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.routesService.findOne(id);
-  }
-
   @Post(':id/print-label')
+  @Roles(Role.PLATFORM_OWNER, Role.OPERATION)
   async printLabel(
     @Param('id', ParseUUIDPipe) id: string,
     @Res() res: Response,
@@ -75,6 +71,11 @@ export class RoutesController {
     
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(result.zpl);
+  }
+
+  @Get(':id')
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
+    return this.routesService.findOne(id);
   }
 
   @Delete(':id')

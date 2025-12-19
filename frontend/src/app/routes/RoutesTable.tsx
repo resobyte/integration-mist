@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useToast } from '@/components/common/ToastContext';
 import { apiGet, apiGetPaginated, apiPost, apiDelete } from '@/lib/api';
+import { getAccessToken } from '@/lib/token';
 import { Route, RouteStatus, Order, Store, Product } from '@/types';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
@@ -248,8 +249,18 @@ export function RoutesTable() {
 
   const handlePrintLabel = async (routeId: string) => {
     try {
+      const token = getAccessToken();
+      if (!token) {
+        showDanger('Oturum süreniz dolmuş. Lütfen tekrar giriş yapın.');
+        return;
+      }
+
       const response = await fetch(`${API_URL}/routes/${routeId}/print-label`, {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
         credentials: 'include',
       });
 

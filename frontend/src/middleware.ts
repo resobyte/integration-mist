@@ -2,8 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { publicRoutes, isRouteAllowed, getDefaultRouteByRole } from '@/config/routes';
 import { Role } from '@/types';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+import { API_URL } from '@/config/api';
 
 async function verifyToken(accessToken: string): Promise<{ role: Role } | null> {
   try {

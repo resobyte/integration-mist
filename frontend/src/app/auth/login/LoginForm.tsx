@@ -92,14 +92,7 @@ export function LoginForm() {
         </div>
       </div>
 
-      <div className="flex items-center justify-between text-sm">
-        <label className="flex items-center text-muted-foreground cursor-pointer">
-          <input type="checkbox" className="mr-2 rounded border-input text-primary focus:ring-primary" />
-          Beni hatırla
-        </label>
-        <a href="#" className="text-primary hover:text-primary-dark font-medium transition-colors">Şifremi unuttum?</a>
-      </div>
-
+     
       {error && (
         <div className="p-3 bg-destructive/10 text-destructive text-sm rounded-lg border border-destructive/20">
           {error}
@@ -117,10 +110,6 @@ export function LoginForm() {
           'Giriş Yap'
         )}
       </button>
-
-      <div className="text-center text-sm text-muted-foreground">
-        Hesabınız yok mu? <a href="#" className="text-primary font-medium hover:underline">Destek ile İletişime Geçin</a>
-      </div>
     </form>
   );
 }

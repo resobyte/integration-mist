@@ -6,6 +6,7 @@ import { apiGet, apiGetPaginated, apiPost, apiDelete } from '@/lib/api';
 import { Route, RouteStatus, Order, Store, Product } from '@/types';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
+import { API_URL } from '@/config/api';
 
 interface RouteFormData {
   name: string;
@@ -247,7 +248,7 @@ export function RoutesTable() {
 
   const handlePrintLabel = async (routeId: string) => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/routes/${routeId}/print-label`, {
+      const response = await fetch(`${API_URL}/routes/${routeId}/print-label`, {
         method: 'POST',
         credentials: 'include',
       });

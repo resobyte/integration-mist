@@ -1,7 +1,6 @@
 import { cookies } from 'next/headers';
 import { AuthUser, Role } from '@/types';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+import { API_URL } from '@/config/api';
 
 export async function getServerUser(): Promise<AuthUser | null> {
   try {

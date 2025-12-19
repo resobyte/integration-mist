@@ -4,6 +4,7 @@ import {
   Post,
   Param,
   Query,
+  Body,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -15,6 +16,7 @@ import { Role } from '../common/interfaces/role.enum';
 import { OrdersService } from './orders.service';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { OrderStatus } from './entities/order.entity';
+import { CreateTestOrderDto } from './dto/create-test-order.dto';
 
 @Controller('orders')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -82,6 +84,39 @@ export class OrdersController {
     return {
       success: true,
       data: await this.ordersService.findOne(id),
+    };
+  }
+
+  @Post('test')
+  @HttpCode(HttpStatus.CREATED)
+  async createTestOrder(@Body() createTestOrderDto: CreateTestOrderDto) {
+    const order = await this.ordersService.createTestOrder(createTestOrderDto.storeId, {
+      customerFirstName: createTestOrderDto.customerFirstName,
+      customerLastName: createTestOrderDto.customerLastName,
+      customerEmail: createTestOrderDto.customerEmail,
+      customerPhone: createTestOrderDto.customerPhone,
+      addressText: createTestOrderDto.addressText,
+      neighborhood: createTestOrderDto.neighborhood,
+      district: createTestOrderDto.district,
+      city: createTestOrderDto.city,
+      postalCode: createTestOrderDto.postalCode,
+      latitude: createTestOrderDto.latitude,
+      longitude: createTestOrderDto.longitude,
+      commercial: createTestOrderDto.commercial,
+      company: createTestOrderDto.company,
+      invoiceTaxNumber: createTestOrderDto.invoiceTaxNumber,
+      invoiceTaxOffice: createTestOrderDto.invoiceTaxOffice,
+      microRegion: createTestOrderDto.microRegion,
+      lines: createTestOrderDto.lines.map((line) => ({
+        productBarcode: line.productBarcode,
+        quantity: line.quantity,
+        discountPercentage: line.discountPercentage,
+      })),
+    });
+    return {
+      success: true,
+      message: 'Test order created successfully',
+      data: order,
     };
   }
 }

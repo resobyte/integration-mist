@@ -13,7 +13,7 @@ import {
 import { StoresService } from './stores.service';
 import { CreateStoreDto } from './dto/create-store.dto';
 import { UpdateStoreDto } from './dto/update-store.dto';
-import { PaginationDto } from '../common/dto/pagination.dto';
+import { StoreFilterDto } from './dto/store-filter.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -31,11 +31,9 @@ export class StoresController {
   }
 
   @Get()
-  findAll(
-    @Query() paginationDto: PaginationDto,
-    @Query('search') search?: string,
-  ) {
-    return this.storesService.findAll(paginationDto, search);
+  findAll(@Query() filterDto: StoreFilterDto) {
+    const isActiveBoolean = filterDto.isActive === undefined ? undefined : filterDto.isActive === 'true';
+    return this.storesService.findAll(filterDto, filterDto.search, isActiveBoolean);
   }
 
   @Get(':id')

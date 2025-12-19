@@ -309,5 +309,96 @@ export class OrdersService {
       results,
     };
   }
+
+  async createTestOrder(storeId: string, orderData: {
+    customerFirstName: string;
+    customerLastName: string;
+    customerEmail: string;
+    customerPhone?: string;
+    addressText: string;
+    neighborhood?: string;
+    district: string;
+    city: string;
+    postalCode?: string;
+    latitude?: string;
+    longitude?: string;
+    commercial?: boolean;
+    company?: string;
+    invoiceTaxNumber?: string;
+    invoiceTaxOffice?: string;
+    microRegion?: string;
+    lines: Array<{ productBarcode: string; quantity: number; discountPercentage?: number }>;
+  }): Promise<OrderResponseDto> {
+    const store = await this.storesService.findOne(storeId);
+    
+    if (!store.sellerId) {
+      throw new NotFoundException('Store sellerId not found');
+    }
+
+    if (!store.apiKey || !store.apiSecret) {
+      throw new NotFoundException('Store API Key or API Secret not found');
+    }
+
+    const trendyolOrder = await this.trendyolApiService.createTestOrder(
+      store.sellerId,
+      store.apiKey,
+      store.apiSecret,
+      orderData,
+    );
+
+    const orderBarcodes = this.extractBarcodesFromLines(trendyolOrder.lines);
+    
+    if (orderBarcodes.length > 0) {
+      const existingBarcodes = await this.productsService.getExistingBarcodes(orderBarcodes);
+      const missingBarcodes = orderBarcodes.filter((b) => !existingBarcodes.has(b));
+
+      if (missingBarcodes.length > 0) {
+        throw new NotFoundException(`Products with barcodes not found: ${missingBarcodes.join(', ')}`);
+      }
+    }
+
+    const orderDataEntity = {
+      storeId: store.id,
+      orderNumber: trendyolOrder.orderNumber,
+      shipmentPackageId: trendyolOrder.shipmentPackageId,
+      trendyolCustomerId: trendyolOrder.customerId,
+      supplierId: trendyolOrder.supplierId,
+      trendyolStatus: trendyolOrder.shipmentPackageStatus || trendyolOrder.status,
+      status: this.mapTrendyolStatusToOrderStatus(trendyolOrder.shipmentPackageStatus || trendyolOrder.status),
+      customerFirstName: trendyolOrder.customerFirstName,
+      customerLastName: trendyolOrder.customerLastName,
+      customerEmail: trendyolOrder.customerEmail,
+      orderDate: trendyolOrder.orderDate,
+      grossAmount: trendyolOrder.packageGrossAmount || trendyolOrder.grossAmount,
+      totalPrice: trendyolOrder.packageTotalPrice || trendyolOrder.totalPrice,
+      currencyCode: trendyolOrder.currencyCode,
+      cargoTrackingNumber: trendyolOrder.cargoTrackingNumber,
+      cargoProviderName: trendyolOrder.cargoProviderName,
+      cargoTrackingLink: trendyolOrder.cargoTrackingLink,
+      shipmentAddress: trendyolOrder.shipmentAddress,
+      invoiceAddress: trendyolOrder.invoiceAddress,
+      lines: trendyolOrder.lines,
+      packageHistories: trendyolOrder.packageHistories,
+      commercial: trendyolOrder.commercial || false,
+      micro: trendyolOrder.micro || false,
+      deliveryAddressType: trendyolOrder.deliveryAddressType,
+      lastModifiedDate: trendyolOrder.lastModifiedDate,
+    };
+
+    const existingOrder = await this.orderRepository.findOne({
+      where: { shipmentPackageId: trendyolOrder.shipmentPackageId },
+    });
+
+    let savedOrder: Order;
+    if (existingOrder) {
+      Object.assign(existingOrder, orderDataEntity);
+      savedOrder = await this.orderRepository.save(existingOrder);
+    } else {
+      const newOrder = this.orderRepository.create(orderDataEntity);
+      savedOrder = await this.orderRepository.save(newOrder);
+    }
+
+    return OrderResponseDto.fromEntity(savedOrder, true);
+  }
 }
 

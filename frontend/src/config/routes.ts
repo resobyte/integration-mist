@@ -30,6 +30,13 @@ export const routes: RouteConfig[] = [
         showInSidebar: true,
       },
       {
+        path: '/test-order',
+        label: 'Test Siparişi',
+        icon: 'test-order',
+        roles: [Role.PLATFORM_OWNER],
+        showInSidebar: true,
+      },
+      {
         path: '/routes',
         label: 'Rotalar',
         icon: 'routes',

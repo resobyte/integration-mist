@@ -56,17 +56,29 @@ export class StoresService {
   async findAll(
     paginationDto: PaginationDto,
     search?: string,
+    isActive?: boolean,
   ): Promise<PaginationResponse<StoreResponseDto>> {
     const { page, limit, sortBy, sortOrder } = paginationDto;
     const skip = (page - 1) * limit;
 
     const queryBuilder = this.storeRepository.createQueryBuilder('store');
 
+    if (isActive !== undefined) {
+      queryBuilder.where('store.isActive = :isActive', { isActive });
+    }
+
     if (search) {
-      queryBuilder.where(
-        '(store.name LIKE :search OR store.description LIKE :search OR store.sellerId LIKE :search)',
-        { search: `%${search}%` },
-      );
+      if (isActive !== undefined) {
+        queryBuilder.andWhere(
+          '(store.name LIKE :search OR store.description LIKE :search OR store.sellerId LIKE :search)',
+          { search: `%${search}%` },
+        );
+      } else {
+        queryBuilder.where(
+          '(store.name LIKE :search OR store.description LIKE :search OR store.sellerId LIKE :search)',
+          { search: `%${search}%` },
+        );
+      }
     }
 
     if (sortBy) {

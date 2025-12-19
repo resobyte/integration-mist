@@ -201,5 +201,148 @@ export class TrendyolApiService {
       );
     }
   }
+
+  async createTestOrder(
+    sellerId: string,
+    apiKey: string,
+    apiSecret: string,
+    orderData: {
+      customerFirstName: string;
+      customerLastName: string;
+      customerEmail: string;
+      customerPhone?: string;
+      addressText: string;
+      neighborhood?: string;
+      district: string;
+      city: string;
+      postalCode?: string;
+      latitude?: string;
+      longitude?: string;
+      commercial?: boolean;
+      company?: string;
+      invoiceTaxNumber?: string;
+      invoiceTaxOffice?: string;
+      microRegion?: string;
+      lines: Array<{ productBarcode: string; quantity: number; discountPercentage?: number }>;
+    },
+  ): Promise<TrendyolOrder> {
+    try {
+      const url = 'https://stageapigw.trendyol.com/integration/test/order/orders/core';
+
+      const integrationCompanyName = this.configService.get<string>('TRENDYOL_INTEGRATION_COMPANY_NAME', 'SelfIntegration');
+      const userAgent = this.configService.get<string>('TRENDYOL_USER_AGENT', `Mozilla/5.0 (compatible; TrendyolIntegration/1.0; +https://trendyol.com)`);
+
+      const tokenString = `${apiKey}:${apiSecret}`;
+      const base64Token = Buffer.from(tokenString, 'utf8').toString('base64');
+      const authToken = `Basic ${base64Token}`;
+
+      const numericSellerId = parseInt(sellerId, 10);
+      if (isNaN(numericSellerId)) {
+        throw new HttpException('Invalid sellerId format', HttpStatus.BAD_REQUEST);
+      }
+
+      const requestBody: any = {
+        customer: {
+          customerFirstName: orderData.customerFirstName,
+          customerLastName: orderData.customerLastName,
+        },
+        shippingAddress: {
+          addressText: orderData.addressText,
+          city: orderData.city,
+          company: '',
+          district: orderData.district,
+          latitude: orderData.latitude || '',
+          longitude: orderData.longitude || '',
+          neighborhood: orderData.neighborhood || '',
+          phone: orderData.customerPhone || '',
+          postalCode: orderData.postalCode || '',
+          shippingFirstName: orderData.customerFirstName,
+          shippingLastName: orderData.customerLastName,
+          email: orderData.customerEmail,
+        },
+        invoiceAddress: {
+          addressText: orderData.addressText,
+          city: orderData.city,
+          company: orderData.company || '',
+          district: orderData.district,
+          invoiceFirstName: orderData.customerFirstName,
+          invoiceLastName: orderData.customerLastName,
+          latitude: orderData.latitude || '',
+          longitude: orderData.longitude || '',
+          neighborhood: orderData.neighborhood || '',
+          phone: orderData.customerPhone || '',
+          postalCode: orderData.postalCode || '',
+          email: orderData.customerEmail,
+          invoiceTaxNumber: orderData.invoiceTaxNumber || '',
+          invoiceTaxOffice: orderData.invoiceTaxOffice || '',
+        },
+        lines: orderData.lines.map((line) => ({
+          barcode: line.productBarcode,
+          quantity: line.quantity,
+          ...(line.discountPercentage !== undefined && { discountPercentage: line.discountPercentage }),
+        })),
+        seller: {
+          sellerId: numericSellerId,
+        },
+        commercial: orderData.commercial || false,
+      };
+
+      if (orderData.microRegion) {
+        requestBody.microRegion = orderData.microRegion;
+      }
+
+      this.logger.log(`Creating test order for sellerId: ${sellerId}`);
+
+      this.logger.debug(`Request URL: ${url}`);
+      this.logger.debug(`Request Headers: SellerID=${numericSellerId}, User-Agent=${userAgent}`);
+
+      const response = await this.axiosInstance.post<TrendyolOrder>(
+        url,
+        requestBody,
+        {
+          headers: {
+            'Authorization': authToken,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'User-Agent': userAgent,
+            'SellerID': numericSellerId.toString(),
+            'Origin': 'https://stageapigw.trendyol.com',
+            'Referer': 'https://stageapigw.trendyol.com/',
+          },
+          maxRedirects: 0,
+          validateStatus: (status) => status < 500,
+          timeout: 30000,
+        },
+      );
+
+      this.logger.log(`Successfully created test order: ${response.data.orderNumber}`);
+
+      return response.data;
+    } catch (error) {
+      this.logger.error(`Error creating test order: ${error.message}`, error.stack);
+      
+      if (axios.isAxiosError(error)) {
+        if (error.response) {
+          throw new HttpException(
+            `Trendyol API error: ${error.response.status} - ${JSON.stringify(error.response.data)}`,
+            error.response.status || HttpStatus.BAD_GATEWAY,
+          );
+        }
+        if (error.request) {
+          throw new HttpException(
+            'No response from Trendyol API',
+            HttpStatus.GATEWAY_TIMEOUT,
+          );
+        }
+      }
+      
+      throw new HttpException(
+        `Failed to create test order: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
 }
 

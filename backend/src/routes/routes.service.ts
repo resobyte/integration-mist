@@ -188,6 +188,8 @@ export class RoutesService {
         status: OrderStatus.PACKED,
       });
 
+      // Trendyol'a Picking status'ü gönderme kısmı yorum satırına alındı
+      /*
       if (order.store?.sellerId && order.store?.apiKey && order.store?.apiSecret) {
         try {
           const lines = order.lines as Array<Record<string, unknown>> | null;
@@ -229,6 +231,7 @@ export class RoutesService {
       } else {
         this.logger.warn(`Store credentials missing for order ${order.orderNumber}, skipping Trendyol update`);
       }
+      */
     }
 
     const updatedRoute = await this.routeRepository.findOne({

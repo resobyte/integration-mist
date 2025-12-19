@@ -30,7 +30,7 @@ import { User } from './users/entities/user.entity';
         password: configService.get('DB_PASSWORD'),
         database: configService.get('DB_NAME'),
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
-        synchronize: configService.get('NODE_ENV') === 'development',
+        synchronize:true,
         logging: configService.get('NODE_ENV') === 'development',
       }),
       inject: [ConfigService],

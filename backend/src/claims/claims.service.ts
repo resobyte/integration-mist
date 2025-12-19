@@ -1,7 +1,7 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { ClaimStatus } from './entities/claim.entity';
+import { ClaimStatus } from './enums/claim-status.enum';
 import { Store } from '../stores/entities/store.entity';
 import { TrendyolClaimsApiService } from './trendyol-claims-api.service';
 import { ClaimResponseDto } from './dto/claim-response.dto';

@@ -80,8 +80,20 @@ export class AuthController {
     const accessToken = request.cookies?.access_token;
     await this.authService.logout(userId, accessToken);
 
-    response.clearCookie('access_token', { path: '/' });
-    response.clearCookie('refresh_token', { path: '/' });
+    const cookieOptions = this.authService.getCookieOptions(false);
+    response.clearCookie('access_token', {
+      path: cookieOptions.path,
+      secure: cookieOptions.secure,
+      sameSite: cookieOptions.sameSite,
+      httpOnly: cookieOptions.httpOnly,
+    });
+    const refreshCookieOptions = this.authService.getCookieOptions(true);
+    response.clearCookie('refresh_token', {
+      path: refreshCookieOptions.path,
+      secure: refreshCookieOptions.secure,
+      sameSite: refreshCookieOptions.sameSite,
+      httpOnly: refreshCookieOptions.httpOnly,
+    });
 
     return { message: 'Logged out successfully' };
   }

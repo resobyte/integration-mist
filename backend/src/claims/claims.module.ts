@@ -1,13 +1,12 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Claim } from './entities/claim.entity';
 import { Store } from '../stores/entities/store.entity';
 import { ClaimsController } from './claims.controller';
 import { ClaimsService } from './claims.service';
 import { TrendyolClaimsApiService } from './trendyol-claims-api.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Claim, Store])],
+  imports: [TypeOrmModule.forFeature([Store])],
   controllers: [ClaimsController],
   providers: [ClaimsService, TrendyolClaimsApiService],
   exports: [ClaimsService, TrendyolClaimsApiService],

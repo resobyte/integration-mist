@@ -16,6 +16,8 @@ import { RouteResponseDto } from './dto/route-response.dto';
 import { OrdersService } from '../orders/orders.service';
 import { TrendyolApiService } from '../orders/trendyol-api.service';
 import { ZplLabelService } from './zpl-label.service';
+import { PaginationDto } from '../common/dto/pagination.dto';
+import { PaginationResponse } from '../common/interfaces/api-response.interface';
 
 @Injectable()
 export class RoutesService {
@@ -271,7 +273,12 @@ export class RoutesService {
     await this.routeRepository.update(id, { status: RouteStatus.CANCELLED });
   }
 
-  async getRouteSuggestions(storeId?: string): Promise<RouteSuggestion[]> {
+  async getRouteSuggestions(
+    storeId?: string,
+    paginationDto?: PaginationDto,
+    typeFilter?: string[],
+    productBarcodes?: string[],
+  ): Promise<PaginationResponse<RouteSuggestion>> {
     const excludedStatuses = [
       OrderStatus.COLLECTING,
       OrderStatus.PACKED,
@@ -292,7 +299,16 @@ export class RoutesService {
     const orders = await queryBuilder.getMany();
 
     if (orders.length === 0) {
-      return [];
+      return {
+        success: true,
+        data: [],
+        meta: {
+          page: paginationDto?.page || 1,
+          limit: paginationDto?.limit || 10,
+          total: 0,
+          totalPages: 0,
+        },
+      };
     }
 
     const suggestions: RouteSuggestion[] = [];
@@ -312,20 +328,17 @@ export class RoutesService {
     for (const [storeKey, storeData] of ordersByStore) {
       const { storeName, orders: storeOrders } = storeData;
 
-      const singleProductByQuantity: Map<number, OrderWithProductInfo[]> = new Map();
-      const mixedByQuantity: Map<number, OrderWithProductInfo[]> = new Map();
+      const orderInfos: OrderWithProductInfo[] = [];
 
       for (const order of storeOrders) {
         const lines = order.lines as any[] | null;
         if (!lines || lines.length === 0) continue;
 
-        const uniqueBarcodes = new Set<string>();
         const productInfos: ProductInfo[] = [];
 
         for (const line of lines) {
           const barcode = line.barcode || line.productBarcode;
           if (barcode) {
-            uniqueBarcodes.add(barcode);
             productInfos.push({
               barcode,
               name: line.productName || line.name || 'Bilinmeyen Ürün',
@@ -334,7 +347,7 @@ export class RoutesService {
           }
         }
 
-        const totalQuantity = productInfos.reduce((sum, p) => sum + p.quantity, 0);
+        if (productInfos.length === 0) continue;
 
         const orderInfo: OrderWithProductInfo = {
           id: order.id,
@@ -343,107 +356,119 @@ export class RoutesService {
           customerFirstName: order.customerFirstName,
           customerLastName: order.customerLastName,
           products: productInfos,
-          uniqueProductCount: uniqueBarcodes.size,
-          totalQuantity,
+          uniqueProductCount: new Set(productInfos.map(p => p.barcode)).size,
+          totalQuantity: productInfos.reduce((sum, p) => sum + p.quantity, 0),
         };
 
+        orderInfos.push(orderInfo);
+      }
+
+      const singleProductSingleQty: Map<string, OrderWithProductInfo[]> = new Map();
+      const singleProductMultiQty: Map<string, Map<number, OrderWithProductInfo[]>> = new Map();
+      const multiProductOrders: OrderWithProductInfo[] = [];
+
+      for (const orderInfo of orderInfos) {
+        const uniqueBarcodes = new Set(orderInfo.products.map(p => p.barcode));
+
         if (uniqueBarcodes.size === 1) {
-          if (!singleProductByQuantity.has(totalQuantity)) {
-            singleProductByQuantity.set(totalQuantity, []);
+          const barcode = Array.from(uniqueBarcodes)[0];
+          const product = orderInfo.products.find(p => p.barcode === barcode)!;
+
+          if (product.quantity === 1) {
+            if (!singleProductSingleQty.has(barcode)) {
+              singleProductSingleQty.set(barcode, []);
+            }
+            singleProductSingleQty.get(barcode)!.push(orderInfo);
+          } else {
+            if (!singleProductMultiQty.has(barcode)) {
+              singleProductMultiQty.set(barcode, new Map());
+            }
+            const quantityMap = singleProductMultiQty.get(barcode)!;
+            if (!quantityMap.has(product.quantity)) {
+              quantityMap.set(product.quantity, []);
+            }
+            quantityMap.get(product.quantity)!.push(orderInfo);
           }
-          singleProductByQuantity.get(totalQuantity)!.push(orderInfo);
-        } else if (uniqueBarcodes.size > 1) {
-          if (!mixedByQuantity.has(totalQuantity)) {
-            mixedByQuantity.set(totalQuantity, []);
-          }
-          mixedByQuantity.get(totalQuantity)!.push(orderInfo);
+        } else {
+          multiProductOrders.push(orderInfo);
         }
       }
 
-      const sortedQuantities = Array.from(singleProductByQuantity.keys()).sort((a, b) => a - b);
+      let priorityCounter = 10000;
 
-      for (const quantity of sortedQuantities) {
-        const orderList = singleProductByQuantity.get(quantity)!;
-        if (orderList.length > 0) {
-          const productCounts: Map<string, { name: string; count: number; quantity: number }> = new Map();
+      for (const [barcode, orderList] of singleProductSingleQty) {
+        if (orderList.length === 0) continue;
 
-          for (const order of orderList) {
-            for (const product of order.products) {
-              const existing = productCounts.get(product.barcode) || { name: product.name, count: 0, quantity: 0 };
-              existing.count++;
-              existing.quantity += product.quantity;
-              productCounts.set(product.barcode, existing);
-            }
-          }
+        const product = orderList[0].products.find(p => p.barcode === barcode)!;
+        const totalQty = orderList.reduce((sum, o) => sum + o.totalQuantity, 0);
 
+        suggestions.push({
+          id: `${storeKey}-single-${barcode}-qty-1`,
+          type: 'single_product',
+          name: `Tekli - ${product.name} (1 Adet)`,
+          description: `${storeName} • ${orderList.length} sipariş • ${product.name}`,
+          storeName,
+          storeId: storeKey !== 'no-store' ? storeKey : undefined,
+          orderCount: orderList.length,
+          totalQuantity: totalQty,
+          products: [{
+            barcode,
+            name: product.name,
+            orderCount: orderList.length,
+            totalQuantity: totalQty,
+          }],
+          orders: orderList,
+          priority: priorityCounter--,
+        });
+      }
+
+      for (const [barcode, quantityMap] of singleProductMultiQty) {
+        const sortedQuantities = Array.from(quantityMap.keys()).sort((a, b) => a - b);
+
+        for (const quantity of sortedQuantities) {
+          const orderList = quantityMap.get(quantity)!;
+          if (orderList.length === 0) continue;
+
+          const product = orderList[0].products.find(p => p.barcode === barcode)!;
           const totalQty = orderList.reduce((sum, o) => sum + o.totalQuantity, 0);
-          const productNames = Array.from(productCounts.values()).map(p => p.name);
 
           suggestions.push({
-            id: `${storeKey}-single-qty-${quantity}`,
-            type: 'single_product',
-            name: `Tek Ürün - ${quantity} Adet`,
-            description: `${storeName} • ${orderList.length} sipariş • ${productNames.slice(0, 2).join(', ')}${productNames.length > 2 ? ` +${productNames.length - 2}` : ''}`,
+            id: `${storeKey}-single-${barcode}-qty-${quantity}`,
+            type: 'single_product_multi',
+            name: `Çoklu - ${product.name} (${quantity} Adet)`,
+            description: `${storeName} • ${orderList.length} sipariş • ${product.name} - ${quantity} adet`,
             storeName,
             storeId: storeKey !== 'no-store' ? storeKey : undefined,
             orderCount: orderList.length,
             totalQuantity: totalQty,
-            products: Array.from(productCounts.entries()).map(([bc, info]) => ({
-              barcode: bc,
-              name: info.name,
-              orderCount: info.count,
-              totalQuantity: info.quantity,
-            })),
+            products: [{
+              barcode,
+              name: product.name,
+              orderCount: orderList.length,
+              totalQuantity: totalQty,
+            }],
             orders: orderList,
-            priority: orderList.length * 10 + (10 - quantity),
+            priority: priorityCounter--,
           });
         }
       }
 
-      const sortedMixedQuantities = Array.from(mixedByQuantity.keys()).sort((a, b) => a - b);
+      const multiProductGroups: Map<string, OrderWithProductInfo[]> = new Map();
 
-      for (const quantity of sortedMixedQuantities) {
-        const orderList = mixedByQuantity.get(quantity)!;
-        if (orderList.length > 0) {
-          const productCounts: Map<string, { name: string; count: number; quantity: number }> = new Map();
-
-          for (const order of orderList) {
-            for (const product of order.products) {
-              const existing = productCounts.get(product.barcode) || { name: product.name, count: 0, quantity: 0 };
-              existing.count++;
-              existing.quantity += product.quantity;
-              productCounts.set(product.barcode, existing);
-            }
-          }
-
-          const totalQty = orderList.reduce((sum, o) => sum + o.totalQuantity, 0);
-
-          suggestions.push({
-            id: `${storeKey}-mixed-qty-${quantity}`,
-            type: 'mixed',
-            name: `Karışık - ${quantity} Adet`,
-            description: `${storeName} • ${orderList.length} sipariş, birden fazla ürün türü`,
-            storeName,
-            storeId: storeKey !== 'no-store' ? storeKey : undefined,
-            orderCount: orderList.length,
-            totalQuantity: totalQty,
-            products: Array.from(productCounts.entries()).map(([bc, info]) => ({
-              barcode: bc,
-              name: info.name,
-              orderCount: info.count,
-              totalQuantity: info.quantity,
-            })),
-            orders: orderList,
-            priority: orderList.length * 5,
-          });
+      for (const orderInfo of multiProductOrders) {
+        const productSignature = this.createProductSignature(orderInfo.products);
+        if (!multiProductGroups.has(productSignature)) {
+          multiProductGroups.set(productSignature, []);
         }
+        multiProductGroups.get(productSignature)!.push(orderInfo);
       }
 
-      const allSingleOrders = Array.from(singleProductByQuantity.values()).flat();
-      if (allSingleOrders.length > 1) {
+      for (const [signature, orderList] of multiProductGroups) {
+        if (orderList.length === 0) continue;
+
         const productCounts: Map<string, { name: string; count: number; quantity: number }> = new Map();
 
-        for (const order of allSingleOrders) {
+        for (const order of orderList) {
           for (const product of order.products) {
             const existing = productCounts.get(product.barcode) || { name: product.name, count: 0, quantity: 0 };
             existing.count++;
@@ -452,32 +477,103 @@ export class RoutesService {
           }
         }
 
-        const totalQuantity = allSingleOrders.reduce((sum, o) => sum + o.totalQuantity, 0);
+        const totalQty = orderList.reduce((sum, o) => sum + o.totalQuantity, 0);
+        const productNames = Array.from(productCounts.values()).map(p => `${p.name}(${p.quantity})`).join(' + ');
 
         suggestions.push({
-          id: `${storeKey}-all-singles`,
-          type: 'all_singles',
-          name: `Tüm Tek Ürünlüler`,
-          description: `${storeName} • ${allSingleOrders.length} sipariş, farklı adetler`,
+          id: `${storeKey}-multi-${signature}`,
+          type: 'mixed',
+          name: `Çoklu Ürün - ${productNames}`,
+          description: `${storeName} • ${orderList.length} sipariş • ${Array.from(productCounts.values()).map(p => p.name).join(', ')}`,
           storeName,
           storeId: storeKey !== 'no-store' ? storeKey : undefined,
-          orderCount: allSingleOrders.length,
-          totalQuantity,
+          orderCount: orderList.length,
+          totalQuantity: totalQty,
           products: Array.from(productCounts.entries()).map(([bc, info]) => ({
             barcode: bc,
             name: info.name,
             orderCount: info.count,
             totalQuantity: info.quantity,
           })),
-          orders: allSingleOrders,
-          priority: 100,
+          orders: orderList,
+          priority: priorityCounter--,
         });
       }
     }
 
-    suggestions.sort((a, b) => b.priority - a.priority);
+    let filteredSuggestions = suggestions;
 
-    return suggestions;
+    if (typeFilter && typeFilter.length > 0) {
+      filteredSuggestions = filteredSuggestions.filter((s) => typeFilter.includes(s.type));
+    }
+
+    if (productBarcodes && productBarcodes.length > 0) {
+      filteredSuggestions = filteredSuggestions.filter((s) =>
+        s.products.some((p) => productBarcodes.includes(p.barcode)),
+      );
+    }
+
+    const sortBy = paginationDto?.sortBy || 'priority';
+    const sortOrder = paginationDto?.sortOrder || 'DESC';
+
+    filteredSuggestions.sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+
+      switch (sortBy) {
+        case 'name':
+          aValue = a.name;
+          bValue = b.name;
+          break;
+        case 'orderCount':
+          aValue = a.orderCount;
+          bValue = b.orderCount;
+          break;
+        case 'totalQuantity':
+          aValue = a.totalQuantity;
+          bValue = b.totalQuantity;
+          break;
+        case 'type':
+          aValue = a.type;
+          bValue = b.type;
+          break;
+        case 'priority':
+        default:
+          aValue = a.priority;
+          bValue = b.priority;
+          break;
+      }
+
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        return sortOrder === 'ASC'
+          ? aValue.localeCompare(bValue)
+          : bValue.localeCompare(aValue);
+      }
+
+      return sortOrder === 'ASC' ? aValue - bValue : bValue - aValue;
+    });
+
+    const page = paginationDto?.page || 1;
+    const limit = paginationDto?.limit || 10;
+    const total = filteredSuggestions.length;
+    const skip = (page - 1) * limit;
+    const paginatedSuggestions = filteredSuggestions.slice(skip, skip + limit);
+
+    return {
+      success: true,
+      data: paginatedSuggestions,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  private createProductSignature(products: ProductInfo[]): string {
+    const sorted = [...products].sort((a, b) => a.barcode.localeCompare(b.barcode));
+    return sorted.map(p => `${p.barcode}:${p.quantity}`).join('|');
   }
 }
 
@@ -507,7 +603,7 @@ interface RouteSuggestionProduct {
 
 export interface RouteSuggestion {
   id: string;
-  type: 'single_product' | 'mixed' | 'all_singles';
+  type: 'single_product' | 'single_product_multi' | 'mixed';
   name: string;
   description: string;
   storeName?: string;

@@ -9,3 +9,4 @@ export enum ClaimStatus {
   IN_ANALYSIS = 'InAnalysis',
 }
 
+

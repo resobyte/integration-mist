@@ -20,6 +20,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/interfaces/role.enum';
+import { PaginationDto } from '../common/dto/pagination.dto';
 
 @Controller('routes')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -57,8 +58,22 @@ export class RoutesController {
   }
 
   @Get('suggestions')
-  getRouteSuggestions(@Query('storeId') storeId?: string) {
-    return this.routesService.getRouteSuggestions(storeId);
+  getRouteSuggestions(
+    @Query('storeId') storeId?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: 'ASC' | 'DESC',
+    @Query('type', new ParseArrayPipe({ items: String, optional: true, separator: ',' })) type?: string[],
+    @Query('productBarcodes', new ParseArrayPipe({ items: String, optional: true, separator: ',' })) productBarcodes?: string[],
+  ) {
+    const paginationDto: PaginationDto = {
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 10,
+      sortBy,
+      sortOrder: sortOrder || 'DESC',
+    };
+    return this.routesService.getRouteSuggestions(storeId, paginationDto, type, productBarcodes);
   }
 
   @Post(':id/print-label')

@@ -42,7 +42,7 @@ interface RouteSuggestionOrder {
 
 interface RouteSuggestion {
   id: string;
-  type: 'single_product' | 'mixed' | 'all_singles';
+  type: 'single_product' | 'single_product_multi' | 'mixed';
   name: string;
   description: string;
   storeName?: string;
@@ -82,6 +82,29 @@ export function RoutesTable() {
   const [suggestions, setSuggestions] = useState<RouteSuggestion[]>([]);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [selectedSuggestion, setSelectedSuggestion] = useState<RouteSuggestion | null>(null);
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [suggestionFilters, setSuggestionFilters] = useState<{
+    type: string[];
+    productBarcodes: string[];
+  }>({
+    type: [],
+    productBarcodes: [],
+  });
+  const [suggestionPagination, setSuggestionPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 0,
+  });
+  const [suggestionSort, setSuggestionSort] = useState<{
+    sortBy: string;
+    sortOrder: 'ASC' | 'DESC';
+  }>({
+    sortBy: 'priority',
+    sortOrder: 'DESC',
+  });
+  const [productSearch, setProductSearch] = useState('');
+  const [isProductDropdownOpen, setIsProductDropdownOpen] = useState(false);
 
   const fetchRoutes = useCallback(async () => {
     setIsLoading(true);
@@ -111,14 +134,34 @@ export function RoutesTable() {
   const fetchSuggestions = useCallback(async () => {
     setIsLoadingSuggestions(true);
     try {
-      const response = await apiGet<RouteSuggestion[]>('/routes/suggestions');
+      const params: any = {
+        page: suggestionPagination.page,
+        limit: suggestionPagination.limit,
+        sortBy: suggestionSort.sortBy,
+        sortOrder: suggestionSort.sortOrder,
+      };
+      if (suggestionFilters.type.length > 0) {
+        params.type = suggestionFilters.type.join(',');
+      }
+      if (suggestionFilters.productBarcodes.length > 0) {
+        params.productBarcodes = suggestionFilters.productBarcodes.join(',');
+      }
+      const response = await apiGetPaginated<RouteSuggestion>('/routes/suggestions', { params });
       setSuggestions(response.data || []);
+      if (response.meta) {
+        setSuggestionPagination({
+          page: response.meta.page,
+          limit: response.meta.limit,
+          total: response.meta.total,
+          totalPages: response.meta.totalPages,
+        });
+      }
     } catch {
       console.error('Failed to fetch suggestions');
     } finally {
       setIsLoadingSuggestions(false);
     }
-  }, []);
+  }, [suggestionPagination.page, suggestionPagination.limit, suggestionSort, suggestionFilters]);
 
   const fetchProducts = useCallback(async () => {
     try {
@@ -159,9 +202,12 @@ export function RoutesTable() {
   useEffect(() => {
     fetchProducts();
     fetchStores();
-    fetchSuggestions();
     fetchPendingOrdersCount();
-  }, [fetchProducts, fetchStores, fetchSuggestions, fetchPendingOrdersCount]);
+  }, [fetchProducts, fetchStores, fetchPendingOrdersCount]);
+
+  useEffect(() => {
+    fetchSuggestions();
+  }, [fetchSuggestions]);
 
   useEffect(() => {
     fetchRoutes();
@@ -317,6 +363,41 @@ export function RoutesTable() {
       [RouteStatus.CANCELLED]: 'bg-destructive/10 text-destructive border-destructive/20',
     };
     return colors[status] || 'bg-muted text-muted-foreground border-border';
+  };
+
+  const getSuggestionTypeLabel = (type: string) => {
+    const labels: Record<string, string> = {
+      single_product: 'Tekli',
+      single_product_multi: 'Tek Ürün Çoklu',
+      mixed: 'Çoklu Ürün',
+    };
+    return labels[type] || type;
+  };
+
+  const getSuggestionTypeColor = (type: string) => {
+    const colors: Record<string, string> = {
+      single_product: 'bg-success/10 text-success border-success/20',
+      single_product_multi: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
+      mixed: 'bg-secondary/10 text-secondary border-secondary/20',
+    };
+    return colors[type] || 'bg-muted text-muted-foreground border-border';
+  };
+
+  const toggleRowExpansion = (id: string) => {
+    const newExpanded = new Set(expandedRows);
+    if (newExpanded.has(id)) {
+      newExpanded.delete(id);
+    } else {
+      newExpanded.add(id);
+    }
+    setExpandedRows(newExpanded);
+  };
+
+  const handleSort = (sortBy: string) => {
+    setSuggestionSort((prev) => ({
+      sortBy,
+      sortOrder: prev.sortBy === sortBy && prev.sortOrder === 'DESC' ? 'ASC' : 'DESC',
+    }));
   };
 
   const handleAutoCreateRoute = async () => {
@@ -510,107 +591,411 @@ export function RoutesTable() {
         </div>
       </div>
 
-      {suggestions.length > 0 && (
-        <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-border flex justify-between items-center">
-            <div>
-              <h3 className="text-lg font-bold text-foreground flex items-center">
-                <svg className="w-5 h-5 mr-2 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                </svg>
-                Rota Önerileri
-              </h3>
-              <p className="text-sm text-muted-foreground mt-1">
-                Siparişleriniz otomatik olarak gruplandı. Tek tıkla rota oluşturun.
-              </p>
-            </div>
+      <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+        <div className="p-4 border-b border-border">
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="text-base font-semibold text-foreground">Rota Önerileri</h3>
             <button
               onClick={fetchSuggestions}
               disabled={isLoadingSuggestions}
-              className="text-primary hover:text-primary-dark text-sm font-medium flex items-center"
+              className="text-xs text-muted-foreground hover:text-foreground"
             >
               {isLoadingSuggestions ? (
-                <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin mr-1" />
+                <div className="h-3 w-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
               ) : (
-                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
+                'Yenile'
               )}
-              Yenile
             </button>
           </div>
-          <div className="p-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {suggestions.map((suggestion) => (
-              <div
-                key={suggestion.id}
-                className={`border rounded-lg p-4 hover:border-primary/50 hover:bg-muted/10 transition-all cursor-pointer ${
-                  suggestion.type === 'all_singles'
-                    ? 'border-primary/30 bg-primary/5'
-                    : suggestion.type === 'single_product'
-                    ? 'border-success/30 bg-success/5'
-                    : 'border-secondary/30 bg-secondary/5'
-                }`}
-                onClick={() => handleSelectSuggestion(suggestion)}
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex flex-wrap gap-1.5">
-                    {suggestion.storeName && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-muted text-foreground border border-border">
-                        {suggestion.storeName}
-                      </span>
-                    )}
-                    <span
-                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                        suggestion.type === 'all_singles'
-                          ? 'bg-primary/10 text-primary border border-primary/20'
-                          : suggestion.type === 'single_product'
-                          ? 'bg-success/10 text-success border border-success/20'
-                          : 'bg-secondary/10 text-secondary border border-secondary/20'
-                      }`}
-                    >
-                      {suggestion.type === 'all_singles'
-                        ? 'Tüm Tekler'
-                        : suggestion.type === 'single_product'
-                        ? 'Tek Ürün'
-                        : 'Karışık'}
-                    </span>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-lg font-bold text-foreground">{suggestion.orderCount}</div>
-                    <div className="text-xs text-muted-foreground">sipariş</div>
-                  </div>
-                </div>
-                <h4 className="font-semibold text-foreground mb-1 line-clamp-1">{suggestion.name}</h4>
-                <p className="text-sm text-muted-foreground mb-3 line-clamp-1">{suggestion.description}</p>
-                <div className="space-y-1.5">
-                  {suggestion.products.slice(0, 3).map((product, idx) => (
-                    <div key={idx} className="flex items-center justify-between text-xs">
-                      <span className="text-foreground truncate max-w-[70%]">{product.name}</span>
-                      <span className="text-muted-foreground font-mono">
-                        {product.totalQuantity} adet
-                      </span>
-                    </div>
-                  ))}
-                  {suggestion.products.length > 3 && (
-                    <div className="text-xs text-muted-foreground">
-                      +{suggestion.products.length - 3} ürün daha...
-                    </div>
-                  )}
-                </div>
-                <button
-                  className="mt-4 w-full bg-primary hover:bg-primary-dark text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleSelectSuggestion(suggestion);
-                  }}
-                >
-                  Bu Rotayı Oluştur
-                </button>
+
+          <div className="flex flex-wrap gap-3 mb-3">
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-xs text-muted-foreground mb-1">Rota Tipi</label>
+              <div className="flex flex-wrap gap-2">
+                {['single_product', 'single_product_multi', 'mixed'].map((type) => (
+                  <label key={type} className="flex items-center gap-1 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={suggestionFilters.type.includes(type)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSuggestionFilters({
+                            ...suggestionFilters,
+                            type: [...suggestionFilters.type, type],
+                          });
+                        } else {
+                          setSuggestionFilters({
+                            ...suggestionFilters,
+                            type: suggestionFilters.type.filter((t) => t !== type),
+                          });
+                        }
+                      }}
+                      className="rounded border-input"
+                    />
+                    <span className="text-xs text-foreground">{getSuggestionTypeLabel(type)}</span>
+                  </label>
+                ))}
               </div>
-            ))}
+            </div>
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-xs text-muted-foreground mb-1">Ürün</label>
+              <div className="relative">
+                <div className="flex flex-wrap gap-1.5 p-1.5 min-h-[36px] border border-input rounded bg-muted/20 focus-within:ring-1 focus-within:ring-primary focus-within:border-primary">
+                  {suggestionFilters.productBarcodes.length > 0 && (
+                    <>
+                      {suggestionFilters.productBarcodes.map((barcode) => {
+                        const product = products.find((p) => p.barcode === barcode);
+                        if (!product) return null;
+                        return (
+                          <span
+                            key={barcode}
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-primary/10 text-primary text-xs"
+                          >
+                            {product.name}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSuggestionFilters({
+                                  ...suggestionFilters,
+                                  productBarcodes: suggestionFilters.productBarcodes.filter((b) => b !== barcode),
+                                });
+                              }}
+                              className="hover:text-destructive"
+                            >
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </span>
+                        );
+                      })}
+                      <button
+                        onClick={() => {
+                          setSuggestionFilters({
+                            ...suggestionFilters,
+                            productBarcodes: [],
+                          });
+                        }}
+                        className="text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        Temizle
+                      </button>
+                    </>
+                  )}
+                  <input
+                    type="text"
+                    placeholder={suggestionFilters.productBarcodes.length === 0 ? "Ara..." : ""}
+                    value={productSearch}
+                    onChange={(e) => setProductSearch(e.target.value)}
+                    onFocus={() => setIsProductDropdownOpen(true)}
+                    className="flex-1 min-w-[100px] bg-transparent border-0 outline-none text-xs placeholder:text-muted-foreground"
+                  />
+                </div>
+                {isProductDropdownOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-10"
+                      onClick={() => setIsProductDropdownOpen(false)}
+                    />
+                    <div className="absolute z-20 w-full mt-1 bg-card border border-border rounded shadow-lg max-h-64 overflow-y-auto">
+                      {products
+                        .filter((product) =>
+                          product.name.toLowerCase().includes(productSearch.toLowerCase()) ||
+                          product.barcode.toLowerCase().includes(productSearch.toLowerCase())
+                        )
+                        .map((product) => {
+                          const isSelected = suggestionFilters.productBarcodes.includes(product.barcode);
+                          return (
+                            <label
+                              key={product.id}
+                              className="flex items-center gap-2 px-2 py-1.5 hover:bg-muted/50 cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSuggestionFilters({
+                                      ...suggestionFilters,
+                                      productBarcodes: [...suggestionFilters.productBarcodes, product.barcode],
+                                    });
+                                  } else {
+                                    setSuggestionFilters({
+                                      ...suggestionFilters,
+                                      productBarcodes: suggestionFilters.productBarcodes.filter((b) => b !== product.barcode),
+                                    });
+                                  }
+                                }}
+                                className="rounded border-input cursor-pointer"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="text-xs text-foreground truncate">{product.name}</div>
+                                <div className="text-xs text-muted-foreground font-mono">{product.barcode}</div>
+                              </div>
+                            </label>
+                          );
+                        })}
+                      {products.filter(
+                        (product) =>
+                          product.name.toLowerCase().includes(productSearch.toLowerCase()) ||
+                          product.barcode.toLowerCase().includes(productSearch.toLowerCase())
+                      ).length === 0 && (
+                        <div className="px-2 py-3 text-xs text-muted-foreground text-center">
+                          Bulunamadı
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
         </div>
-      )}
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-muted/30 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                <th className="px-6 py-3 w-12"></th>
+                <th className="px-6 py-3">
+                  <button
+                    onClick={() => handleSort('name')}
+                    className="flex items-center gap-1 hover:text-foreground"
+                  >
+                    Rota Adı
+                    {suggestionSort.sortBy === 'name' && (
+                      <span>{suggestionSort.sortOrder === 'ASC' ? '↑' : '↓'}</span>
+                    )}
+                  </button>
+                </th>
+                <th className="px-6 py-3">
+                  <button
+                    onClick={() => handleSort('type')}
+                    className="flex items-center gap-1 hover:text-foreground"
+                  >
+                    Tip
+                    {suggestionSort.sortBy === 'type' && (
+                      <span>{suggestionSort.sortOrder === 'ASC' ? '↑' : '↓'}</span>
+                    )}
+                  </button>
+                </th>
+                <th className="px-6 py-3">Mağaza</th>
+                <th className="px-6 py-3">
+                  <button
+                    onClick={() => handleSort('orderCount')}
+                    className="flex items-center gap-1 hover:text-foreground"
+                  >
+                    Sipariş Sayısı
+                    {suggestionSort.sortBy === 'orderCount' && (
+                      <span>{suggestionSort.sortOrder === 'ASC' ? '↑' : '↓'}</span>
+                    )}
+                  </button>
+                </th>
+                <th className="px-6 py-3">
+                  <button
+                    onClick={() => handleSort('totalQuantity')}
+                    className="flex items-center gap-1 hover:text-foreground"
+                  >
+                    Toplam Adet
+                    {suggestionSort.sortBy === 'totalQuantity' && (
+                      <span>{suggestionSort.sortOrder === 'ASC' ? '↑' : '↓'}</span>
+                    )}
+                  </button>
+                </th>
+                <th className="px-6 py-3">İşlemler</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {isLoadingSuggestions ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-8 text-center">
+                    <div className="flex justify-center">
+                      <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  </td>
+                </tr>
+              ) : suggestions.length > 0 ? (
+                suggestions.map((suggestion) => (
+                  <>
+                    <tr
+                      key={suggestion.id}
+                      className="hover:bg-muted/20 transition-colors cursor-pointer"
+                      onClick={() => toggleRowExpansion(suggestion.id)}
+                    >
+                      <td className="px-6 py-4">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleRowExpansion(suggestion.id);
+                          }}
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          {expandedRows.has(suggestion.id) ? (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          ) : (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          )}
+                        </button>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm font-medium text-foreground">{suggestion.name}</div>
+                        <div className="text-xs text-muted-foreground mt-1">{suggestion.description}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${getSuggestionTypeColor(suggestion.type)}`}>
+                          {getSuggestionTypeLabel(suggestion.type)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-muted-foreground">
+                        {suggestion.storeName || '-'}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-foreground">{suggestion.orderCount}</td>
+                      <td className="px-6 py-4 text-sm text-foreground">{suggestion.totalQuantity}</td>
+                      <td className="px-6 py-4">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSelectSuggestion(suggestion);
+                          }}
+                          className="text-primary hover:text-primary-dark text-sm font-medium"
+                        >
+                          Rota Oluştur
+                        </button>
+                      </td>
+                    </tr>
+                    {expandedRows.has(suggestion.id) && (
+                      <tr>
+                        <td colSpan={7} className="px-6 py-4 bg-muted/5">
+                          <div className="space-y-4">
+                            <div>
+                              <div className="flex items-center justify-between mb-3">
+                                <h4 className="text-sm font-medium text-foreground">
+                                  Ürünler ({suggestion.products.length})
+                                </h4>
+                                <div className="text-xs text-muted-foreground">
+                                  Toplam: <span className="font-medium text-foreground">{suggestion.totalQuantity} adet</span>
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+                                {suggestion.products.map((product, idx) => (
+                                  <div
+                                    key={idx}
+                                    className="bg-card rounded border border-border p-3"
+                                  >
+                                    <div className="text-sm font-medium text-foreground mb-1 line-clamp-1">
+                                      {product.name}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground font-mono mb-2">
+                                      {product.barcode}
+                                    </div>
+                                    <div className="flex items-center gap-3 text-xs">
+                                      <span className="text-foreground">
+                                        <span className="font-medium">{product.totalQuantity}</span> adet
+                                      </span>
+                                      <span className="text-muted-foreground">
+                                        {product.orderCount} sipariş
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                            <div>
+                              <h4 className="text-sm font-medium text-foreground mb-3">
+                                Siparişler ({suggestion.orders.length})
+                              </h4>
+                              <div className="max-h-48 overflow-y-auto border border-border rounded">
+                                <table className="w-full text-left border-collapse text-xs">
+                                  <thead className="bg-muted/30 sticky top-0">
+                                    <tr>
+                                      <th className="px-3 py-2 text-muted-foreground font-medium">Sipariş No</th>
+                                      <th className="px-3 py-2 text-muted-foreground font-medium">Müşteri</th>
+                                      <th className="px-3 py-2 text-muted-foreground font-medium">Ürünler</th>
+                                      <th className="px-3 py-2 text-muted-foreground font-medium text-right">Toplam</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-border/50">
+                                    {suggestion.orders.map((order) => (
+                                      <tr key={order.id} className="hover:bg-muted/10">
+                                        <td className="px-3 py-2 text-foreground">{order.orderNumber}</td>
+                                        <td className="px-3 py-2 text-muted-foreground">
+                                          {order.customerFirstName} {order.customerLastName}
+                                        </td>
+                                        <td className="px-3 py-2">
+                                          <div className="flex flex-wrap gap-1">
+                                            {order.products.map((p, pIdx) => (
+                                              <span
+                                                key={pIdx}
+                                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted/50 text-xs text-foreground"
+                                              >
+                                                <span>{p.name}</span>
+                                                <span className="text-muted-foreground">×{p.quantity}</span>
+                                              </span>
+                                            ))}
+                                          </div>
+                                        </td>
+                                        <td className="px-3 py-2 text-foreground text-right font-medium">
+                                          {order.totalQuantity} adet
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={7} className="px-6 py-8 text-center text-muted-foreground">
+                    Rota önerisi bulunamadı.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {suggestionPagination.totalPages > 1 && (
+          <div className="p-4 border-t border-border flex items-center justify-between">
+            <div className="text-sm text-muted-foreground">
+              Toplam {suggestionPagination.total} öneri, Sayfa {suggestionPagination.page} / {suggestionPagination.totalPages}
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  if (suggestionPagination.page > 1) {
+                    setSuggestionPagination({ ...suggestionPagination, page: suggestionPagination.page - 1 });
+                  }
+                }}
+                disabled={suggestionPagination.page === 1}
+                className="px-3 py-1.5 text-sm border border-input rounded-lg hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Önceki
+              </button>
+              <button
+                onClick={() => {
+                  if (suggestionPagination.page < suggestionPagination.totalPages) {
+                    setSuggestionPagination({ ...suggestionPagination, page: suggestionPagination.page + 1 });
+                  }
+                }}
+                disabled={suggestionPagination.page === suggestionPagination.totalPages}
+                className="px-3 py-1.5 text-sm border border-input rounded-lg hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Sonraki
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {isFilterModalOpen && (
         <div

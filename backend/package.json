@@ -1,7 +1,7 @@
 {
   "name": "cw-panel-api",
   "version": "1.0.0",
-  "description": "Admin Panel API",
+  "description": "La Vielle Panel API",
   "private": true,
   "scripts": {
     "build": "nest build",

@@ -9,8 +9,8 @@ const rubik = Rubik({
 });
 
 export const metadata: Metadata = {
-  title: 'Admin Panel',
-  description: 'Administration Panel',
+  title: 'La Vielle Panel',
+  description: 'La Vielle Administration Panel',
 };
 
 export default function RootLayout({
@@ -19,7 +19,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="tr">
       <body className={`${rubik.variable} font-sans antialiased`}>
         <ToastProvider>
           {children}

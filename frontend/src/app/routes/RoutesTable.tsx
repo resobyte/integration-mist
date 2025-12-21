@@ -341,7 +341,7 @@ export function RoutesTable() {
       });
       showSuccess('Rota başarıyla oluşturuldu');
       setIsModalOpen(false);
-      setFormData({ name: '', description: '', selectedOrderIds: [], storeId: undefined });
+      setFormData({ name: '', description: '', selectedOrderIds: [] });
       setFilteredOrders([]);
       setSelectedSuggestion(null);
       fetchRoutes();

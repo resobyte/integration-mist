@@ -6,37 +6,42 @@ export class RouteFilterDto {
   @IsArray()
   @IsString({ each: true })
   @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      return value.split(',').filter(Boolean);
+    }
     if (Array.isArray(value)) {
       return value;
     }
-    if (typeof value === 'string') {
-      return [value];
-    }
     return value;
   })
-  productIds?: string[];
+  productBarcodes?: string[];
 
   @IsOptional()
-  @IsArray()
+  @IsString()
+  brand?: string;
+
+  @IsOptional()
+  @IsString()
+  type?: string;
+
+  @IsOptional()
   @Type(() => Number)
-  @IsNumber({}, { each: true })
-  @Transform(({ value }) => {
-    if (Array.isArray(value)) {
-      return value.map((v) => Number(v));
-    }
-    if (typeof value === 'string') {
-      return [Number(value)];
-    }
-    return value;
-  })
-  quantities?: number[];
+  @IsNumber()
+  minOrderCount?: number;
 
   @IsOptional()
-  @IsString()
-  storeId?: string;
+  @Type(() => Number)
+  @IsNumber()
+  maxOrderCount?: number;
 
   @IsOptional()
-  @IsString()
-  status?: string;
+  @Type(() => Number)
+  @IsNumber()
+  minTotalQuantity?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  maxTotalQuantity?: number;
 }
 

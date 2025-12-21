@@ -13,13 +13,17 @@ interface RouteFormData {
   name: string;
   description: string;
   selectedOrderIds: string[];
+  storeId?: string;
 }
 
 interface FilterData {
-  productIds: string[];
-  quantities: number[];
-  storeId: string;
-  status: string;
+  productBarcodes: string[];
+  brand?: string;
+  type?: string;
+  minOrderCount?: number;
+  maxOrderCount?: number;
+  minTotalQuantity?: number;
+  maxTotalQuantity?: number;
 }
 
 interface RouteSuggestionProduct {
@@ -27,6 +31,7 @@ interface RouteSuggestionProduct {
   name: string;
   orderCount: number;
   totalQuantity: number;
+  imageUrl: string | null;
 }
 
 interface RouteSuggestionOrder {
@@ -58,22 +63,35 @@ export function RoutesTable() {
   const { showSuccess, showDanger } = useToast();
   const [routes, setRoutes] = useState<Route[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [routesPagination, setRoutesPagination] = useState({
+    page: 1,
+    limit: 50,
+    total: 0,
+    totalPages: 0,
+  });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const [selectedRoute, setSelectedRoute] = useState<Route | null>(null);
   const [statusFilter, setStatusFilter] = useState<RouteStatus[]>([RouteStatus.COLLECTING, RouteStatus.READY]);
-  const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
   const [formData, setFormData] = useState<RouteFormData>({
     name: '',
     description: '',
     selectedOrderIds: [],
+    storeId: undefined,
   });
   const [filterData, setFilterData] = useState<FilterData>({
-    productIds: [],
-    quantities: [],
-    storeId: '',
-    status: '',
+    productBarcodes: [],
+    brand: undefined,
+    type: undefined,
+    minOrderCount: undefined,
+    maxOrderCount: undefined,
+    minTotalQuantity: undefined,
+    maxTotalQuantity: undefined,
   });
+  const [filterProductSearch, setFilterProductSearch] = useState('');
+  const [isFilterProductDropdownOpen, setIsFilterProductDropdownOpen] = useState(false);
+  const [isFilteredOrdersCollapsed, setIsFilteredOrdersCollapsed] = useState(false);
+  const [isSuggestionsCollapsed, setIsSuggestionsCollapsed] = useState(false);
   const [filteredOrders, setFilteredOrders] = useState<any[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
@@ -84,15 +102,25 @@ export function RoutesTable() {
   const [selectedSuggestion, setSelectedSuggestion] = useState<RouteSuggestion | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [suggestionFilters, setSuggestionFilters] = useState<{
-    type: string[];
+    type: string | undefined;
     productBarcodes: string[];
+    storeId?: string;
+    minOrderCount?: number;
+    maxOrderCount?: number;
+    minTotalQuantity?: number;
+    maxTotalQuantity?: number;
   }>({
-    type: [],
+    type: undefined,
     productBarcodes: [],
+    storeId: undefined,
+    minOrderCount: undefined,
+    maxOrderCount: undefined,
+    minTotalQuantity: undefined,
+    maxTotalQuantity: undefined,
   });
   const [suggestionPagination, setSuggestionPagination] = useState({
     page: 1,
-    limit: 10,
+    limit: 50,
     total: 0,
     totalPages: 0,
   });
@@ -105,31 +133,48 @@ export function RoutesTable() {
   });
   const [productSearch, setProductSearch] = useState('');
   const [isProductDropdownOpen, setIsProductDropdownOpen] = useState(false);
+  const [hoveredProduct, setHoveredProduct] = useState<{ imageUrl: string; name: string; x: number; y: number } | null>(null);
+  
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (isFilterProductDropdownOpen) {
+        const target = event.target as HTMLElement;
+        if (!target.closest('.relative')) {
+          setIsFilterProductDropdownOpen(false);
+        }
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isFilterProductDropdownOpen]);
 
   const fetchRoutes = useCallback(async () => {
     setIsLoading(true);
     try {
-      const params: any = {};
+      const params: any = {
+        page: routesPagination.page,
+        limit: routesPagination.limit,
+      };
       if (statusFilter.length > 0) {
         params.status = statusFilter.join(',');
       }
-      const response = await apiGet<Route[]>('/routes', { params });
+      const response = await apiGetPaginated<Route>('/routes', { params });
       setRoutes(response.data || []);
+      if (response.meta) {
+        setRoutesPagination({
+          page: response.meta.page,
+          limit: response.meta.limit,
+          total: response.meta.total,
+          totalPages: response.meta.totalPages,
+        });
+      }
     } catch {
       console.error('Failed to fetch routes');
     } finally {
       setIsLoading(false);
     }
-  }, [statusFilter]);
+  }, [statusFilter, routesPagination.page, routesPagination.limit]);
 
-  const fetchPendingOrdersCount = useCallback(async () => {
-    try {
-      const response = await apiGet<{ count: number }>('/orders/count', { params: { status: 'PENDING' } });
-      setPendingOrdersCount(response.data?.count || 0);
-    } catch {
-      console.error('Failed to fetch pending orders count');
-    }
-  }, []);
 
   const fetchSuggestions = useCallback(async () => {
     setIsLoadingSuggestions(true);
@@ -140,11 +185,26 @@ export function RoutesTable() {
         sortBy: suggestionSort.sortBy,
         sortOrder: suggestionSort.sortOrder,
       };
-      if (suggestionFilters.type.length > 0) {
-        params.type = suggestionFilters.type.join(',');
+      if (suggestionFilters.type) {
+        params.type = suggestionFilters.type;
       }
       if (suggestionFilters.productBarcodes.length > 0) {
         params.productBarcodes = suggestionFilters.productBarcodes.join(',');
+      }
+      if (suggestionFilters.storeId) {
+        params.storeId = suggestionFilters.storeId;
+      }
+      if (suggestionFilters.minOrderCount !== undefined) {
+        params.minOrderCount = suggestionFilters.minOrderCount;
+      }
+      if (suggestionFilters.maxOrderCount !== undefined) {
+        params.maxOrderCount = suggestionFilters.maxOrderCount;
+      }
+      if (suggestionFilters.minTotalQuantity !== undefined) {
+        params.minTotalQuantity = suggestionFilters.minTotalQuantity;
+      }
+      if (suggestionFilters.maxTotalQuantity !== undefined) {
+        params.maxTotalQuantity = suggestionFilters.maxTotalQuantity;
       }
       const response = await apiGetPaginated<RouteSuggestion>('/routes/suggestions', { params });
       setSuggestions(response.data || []);
@@ -202,8 +262,7 @@ export function RoutesTable() {
   useEffect(() => {
     fetchProducts();
     fetchStores();
-    fetchPendingOrdersCount();
-  }, [fetchProducts, fetchStores, fetchPendingOrdersCount]);
+  }, [fetchProducts, fetchStores]);
 
   useEffect(() => {
     fetchSuggestions();
@@ -215,9 +274,12 @@ export function RoutesTable() {
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && (isModalOpen || isFilterModalOpen)) {
-        setIsModalOpen(false);
-        setIsFilterModalOpen(false);
+      if (e.key === 'Escape') {
+        if (isModalOpen) {
+          closeCreateModal();
+        } else if (isFilterModalOpen) {
+          setIsFilterModalOpen(false);
+        }
       }
     };
     document.addEventListener('keydown', handleEscape);
@@ -228,20 +290,27 @@ export function RoutesTable() {
     setIsFiltering(true);
     try {
       const params: any = {};
-      if (filterData.productIds.length > 0) {
-        const barcodes = filterData.productIds
-          .map((productId) => {
-            const product = products.find((p) => p.id === productId);
-            return product?.barcode;
-          })
-          .filter((barcode): barcode is string => Boolean(barcode));
-        if (barcodes.length > 0) {
-          params.productIds = barcodes;
-        }
+      if (filterData.productBarcodes.length > 0) {
+        params.productBarcodes = filterData.productBarcodes.join(',');
       }
-      if (filterData.quantities.length > 0) params.quantities = filterData.quantities;
-      if (filterData.storeId) params.storeId = filterData.storeId;
-      if (filterData.status) params.status = filterData.status;
+      if (filterData.brand) {
+        params.brand = filterData.brand;
+      }
+      if (filterData.type) {
+        params.type = filterData.type;
+      }
+      if (filterData.minOrderCount !== undefined) {
+        params.minOrderCount = filterData.minOrderCount;
+      }
+      if (filterData.maxOrderCount !== undefined) {
+        params.maxOrderCount = filterData.maxOrderCount;
+      }
+      if (filterData.minTotalQuantity !== undefined) {
+        params.minTotalQuantity = filterData.minTotalQuantity;
+      }
+      if (filterData.maxTotalQuantity !== undefined) {
+        params.maxTotalQuantity = filterData.maxTotalQuantity;
+      }
 
       const response = await apiGet<any[]>('/routes/filter-orders', { params });
       setFilteredOrders(response.data || []);
@@ -266,15 +335,15 @@ export function RoutesTable() {
         name: formData.name,
         description: formData.description || undefined,
         orderIds: formData.selectedOrderIds,
+        storeId: formData.storeId,
       });
       showSuccess('Rota başarıyla oluşturuldu');
       setIsModalOpen(false);
-      setFormData({ name: '', description: '', selectedOrderIds: [] });
+      setFormData({ name: '', description: '', selectedOrderIds: [], storeId: undefined });
       setFilteredOrders([]);
       setSelectedSuggestion(null);
       fetchRoutes();
       fetchSuggestions();
-      fetchPendingOrdersCount();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Rota oluşturulurken hata oluştu';
       showDanger(errorMessage);
@@ -283,12 +352,19 @@ export function RoutesTable() {
     }
   };
 
+  const closeCreateModal = () => {
+    setIsModalOpen(false);
+    setSelectedSuggestion(null);
+    setFormData({ name: '', description: '', selectedOrderIds: [], storeId: undefined });
+  };
+
   const handleSelectSuggestion = (suggestion: RouteSuggestion) => {
     setSelectedSuggestion(suggestion);
     setFormData({
       name: suggestion.name,
       description: suggestion.description,
       selectedOrderIds: suggestion.orders.map((o) => o.id),
+      storeId: suggestion.storeId,
     });
     setIsModalOpen(true);
   };
@@ -400,36 +476,6 @@ export function RoutesTable() {
     }));
   };
 
-  const handleAutoCreateRoute = async () => {
-    if (pendingOrdersCount === 0) {
-      showDanger('Bekleyen sipariş bulunmuyor');
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const response = await apiGet<any[]>('/routes/filter-orders', { params: { status: 'PENDING' } });
-      if (response.data && response.data.length > 0) {
-        const orderIds = response.data.map((o) => o.id);
-        await apiPost('/routes', {
-          name: `Otomatik Rota - ${new Date().toLocaleDateString('tr-TR')}`,
-          description: `${response.data.length} bekleyen sipariş için otomatik oluşturuldu`,
-          orderIds,
-        });
-        showSuccess(`${response.data.length} sipariş için rota başarıyla oluşturuldu`);
-        fetchRoutes();
-        fetchSuggestions();
-        fetchPendingOrdersCount();
-      } else {
-        showDanger('Rota oluşturulacak sipariş bulunamadı');
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Rota oluşturulurken hata oluştu';
-      showDanger(errorMessage);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -439,18 +485,6 @@ export function RoutesTable() {
           <p className="text-muted-foreground mt-1">Sipariş rotalarını oluşturun ve yönetin.</p>
         </div>
         <div className="flex gap-2">
-          {pendingOrdersCount > 0 && (
-            <button
-              onClick={handleAutoCreateRoute}
-              disabled={isSubmitting}
-              className="bg-success hover:bg-success-dark text-white px-4 py-2 rounded-lg flex items-center shadow-md transition-all active:scale-95 disabled:opacity-50"
-            >
-              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-              Bekleyen Siparişlerden Rota Oluştur ({pendingOrdersCount})
-            </button>
-          )}
           <button
             onClick={() => setIsFilterModalOpen(true)}
             className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg flex items-center shadow-md transition-all active:scale-95"
@@ -589,59 +623,344 @@ export function RoutesTable() {
             </tbody>
           </table>
         </div>
+        <div className="p-4 border-t border-border flex items-center justify-between">
+          <div className="text-sm text-muted-foreground">
+            Toplam {routesPagination.total} rota{routesPagination.totalPages > 1 && `, Sayfa ${routesPagination.page} / ${routesPagination.totalPages}`}
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-muted-foreground">Sayfa başına:</label>
+              <select
+                value={routesPagination.limit}
+                onChange={(e) => {
+                  setRoutesPagination({
+                    ...routesPagination,
+                    limit: parseInt(e.target.value, 10),
+                    page: 1,
+                  });
+                }}
+                className="px-2 py-1 text-xs border border-input rounded bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              >
+                <option value="10">10</option>
+                <option value="25">25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
+            </div>
+            {routesPagination.totalPages > 1 && (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    if (routesPagination.page > 1) {
+                      setRoutesPagination({ ...routesPagination, page: routesPagination.page - 1 });
+                    }
+                  }}
+                  disabled={routesPagination.page === 1}
+                  className="px-3 py-1.5 text-sm border border-input rounded-lg hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Önceki
+                </button>
+                <button
+                  onClick={() => {
+                    if (routesPagination.page < routesPagination.totalPages) {
+                      setRoutesPagination({ ...routesPagination, page: routesPagination.page + 1 });
+                    }
+                  }}
+                  disabled={routesPagination.page === routesPagination.totalPages}
+                  className="px-3 py-1.5 text-sm border border-input rounded-lg hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Sonraki
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
-      <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-border">
-          <div className="flex justify-between items-center mb-3">
-            <h3 className="text-base font-semibold text-foreground">Rota Önerileri</h3>
+      {filteredOrders.length > 0 && !isModalOpen && (
+        <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-border flex justify-between items-center">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setIsFilteredOrdersCollapsed(!isFilteredOrdersCollapsed)}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {isFilteredOrdersCollapsed ? (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                )}
+              </button>
+              <h3 className="text-base font-semibold text-foreground">
+                Filtrelenmiş Siparişler ({filteredOrders.length})
+              </h3>
+            </div>
             <button
-              onClick={fetchSuggestions}
-              disabled={isLoadingSuggestions}
-              className="text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => setIsModalOpen(true)}
+              className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium"
             >
-              {isLoadingSuggestions ? (
-                <div className="h-3 w-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-              ) : (
-                'Yenile'
-              )}
+              Rota Oluştur
             </button>
           </div>
-
-          <div className="flex flex-wrap gap-3 mb-3">
-            <div className="flex-1 min-w-[200px]">
-              <label className="block text-xs text-muted-foreground mb-1">Rota Tipi</label>
-              <div className="flex flex-wrap gap-2">
-                {['single_product', 'single_product_multi', 'mixed'].map((type) => (
-                  <label key={type} className="flex items-center gap-1 cursor-pointer">
+          {!isFilteredOrdersCollapsed && (
+            <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-muted/30 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  <th className="px-6 py-3 w-12">
                     <input
                       type="checkbox"
-                      checked={suggestionFilters.type.includes(type)}
+                      checked={formData.selectedOrderIds.length === filteredOrders.length && filteredOrders.length > 0}
                       onChange={(e) => {
                         if (e.target.checked) {
-                          setSuggestionFilters({
-                            ...suggestionFilters,
-                            type: [...suggestionFilters.type, type],
+                          setFormData({
+                            ...formData,
+                            selectedOrderIds: filteredOrders.map((o) => o.id),
                           });
                         } else {
-                          setSuggestionFilters({
-                            ...suggestionFilters,
-                            type: suggestionFilters.type.filter((t) => t !== type),
-                          });
+                          setFormData({ ...formData, selectedOrderIds: [] });
                         }
                       }}
                       className="rounded border-input"
                     />
-                    <span className="text-xs text-foreground">{getSuggestionTypeLabel(type)}</span>
-                  </label>
-                ))}
-              </div>
+                  </th>
+                  <th className="px-6 py-3">Ürünler</th>
+                  <th className="px-6 py-3">Sipariş Sayısı</th>
+                  <th className="px-6 py-3">Toplam Adet</th>
+                  <th className="px-6 py-3">Tip</th>
+                  <th className="px-6 py-3">Mağaza</th>
+                  <th className="px-6 py-3">Sipariş No</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {filteredOrders.map((order) => {
+                  const orderLines = order.lines || [];
+                  const uniqueProducts = new Set(
+                    orderLines.map((line: any) => line.barcode || line.productBarcode).filter(Boolean)
+                  );
+                  const totalQuantity = orderLines.reduce((sum: number, line: any) => sum + (line.quantity || 0), 0);
+                  
+                  let orderType: 'single_product' | 'single_product_multi' | 'mixed' = 'single_product';
+                  if (uniqueProducts.size === 1) {
+                    const hasMultiQuantity = orderLines.some((line: any) => (line.quantity || 0) > 1);
+                    orderType = hasMultiQuantity ? 'single_product_multi' : 'single_product';
+                  } else if (uniqueProducts.size > 1) {
+                    orderType = 'mixed';
+                  }
+
+                  const orderProducts = Array.from(uniqueProducts).map((barcode) => {
+                    const barcodeStr = String(barcode);
+                    const product = products.find((p) => p.barcode === barcodeStr);
+                    const line = orderLines.find((l: any) => (l.barcode || l.productBarcode) === barcodeStr);
+                    const quantity = line ? (line.quantity || 0) : 0;
+                    return {
+                      barcode: barcodeStr,
+                      name: product?.name || barcodeStr,
+                      imageUrl: product?.imageUrl || null,
+                      totalQuantity: quantity,
+                      orderCount: 1,
+                    };
+                  });
+
+                  return (
+                    <tr key={order.id} className="hover:bg-muted/20 transition-colors">
+                      <td className="px-6 py-4">
+                        <input
+                          type="checkbox"
+                          checked={formData.selectedOrderIds.includes(order.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setFormData({
+                                ...formData,
+                                selectedOrderIds: [...formData.selectedOrderIds, order.id],
+                              });
+                            } else {
+                              setFormData({
+                                ...formData,
+                                selectedOrderIds: formData.selectedOrderIds.filter((id) => id !== order.id),
+                              });
+                            }
+                          }}
+                          className="rounded border-input"
+                        />
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-start gap-2 flex-wrap">
+                          {orderProducts.slice(0, 4).map((product, idx) => (
+                            <div
+                              key={idx}
+                              className="relative"
+                              onMouseEnter={(e) => {
+                                if (product.imageUrl) {
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  setHoveredProduct({
+                                    imageUrl: product.imageUrl,
+                                    name: product.name,
+                                    x: rect.left + rect.width / 2,
+                                    y: rect.top,
+                                  });
+                                }
+                              }}
+                              onMouseMove={(e) => {
+                                if (product.imageUrl && hoveredProduct?.imageUrl === product.imageUrl) {
+                                  setHoveredProduct({
+                                    imageUrl: product.imageUrl,
+                                    name: product.name,
+                                    x: e.clientX,
+                                    y: e.currentTarget.getBoundingClientRect().top,
+                                  });
+                                }
+                              }}
+                              onMouseLeave={() => {
+                                setHoveredProduct(null);
+                              }}
+                            >
+                              {product.imageUrl ? (
+                                <img
+                                  src={product.imageUrl}
+                                  alt={product.name}
+                                  className="w-14 h-14 rounded border border-border object-contain bg-muted/20 cursor-pointer"
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).style.display = 'none';
+                                  }}
+                                />
+                              ) : (
+                                <div className="w-14 h-14 rounded border border-border bg-muted/50 flex items-center justify-center">
+                                  <svg className="w-7 h-7 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                  </svg>
+                                </div>
+                              )}
+                              <span className="absolute -top-1.5 -right-1.5 bg-primary text-white text-[11px] font-bold rounded-full min-w-[20px] h-5 px-1 flex items-center justify-center leading-none shadow-md">
+                                ×{product.orderCount > 0 ? Math.round(product.totalQuantity / product.orderCount) : product.totalQuantity}
+                              </span>
+                            </div>
+                          ))}
+                          {orderProducts.length > 4 && (
+                            <div className="w-14 h-14 rounded border border-border bg-muted/30 flex items-center justify-center text-xs font-medium text-muted-foreground">
+                              +{orderProducts.length - 4}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-foreground align-middle">1</td>
+                      <td className="px-6 py-4 text-sm text-foreground align-middle">{totalQuantity}</td>
+                      <td className="px-6 py-4 align-middle">
+                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium border whitespace-nowrap ${getSuggestionTypeColor(orderType)}`}>
+                          {getSuggestionTypeLabel(orderType)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-foreground align-middle">{order.store?.name || '-'}</td>
+                      <td className="px-6 py-4 text-sm font-medium text-foreground align-middle">{order.orderNumber}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
             </div>
-            <div className="flex-1 min-w-[200px]">
-              <label className="block text-xs text-muted-foreground mb-1">Ürün</label>
+          )}
+        </div>
+      )}
+
+      <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+        <div className="p-4 border-b border-border">
+          <div className="flex justify-between items-center mb-3">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setIsSuggestionsCollapsed(!isSuggestionsCollapsed)}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {isSuggestionsCollapsed ? (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                )}
+              </button>
+              <h3 className="text-base font-semibold text-foreground">Rota Önerileri</h3>
+            </div>
+            <button
+              onClick={fetchSuggestions}
+              disabled={isLoadingSuggestions}
+              className="flex items-center gap-1.5 text-xs text-primary hover:text-primary-dark transition-colors"
+            >
+              {isLoadingSuggestions ? (
+                <div className="h-3 w-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <>
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Yenile
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {!isSuggestionsCollapsed && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 mb-3 p-4">
+                <div>
+              <label className="block text-xs text-muted-foreground mb-2">Rota Tipi</label>
+              <select
+                value={suggestionFilters.type ?? ''}
+                onChange={(e) => {
+                  setSuggestionFilters({
+                    ...suggestionFilters,
+                    type: e.target.value || undefined,
+                  });
+                }}
+                className="w-full px-2 py-1.5 text-xs border border-input rounded bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary h-[38px]"
+              >
+                <option value="">Tümü</option>
+                <option value="single_product">Tekli Ürün</option>
+                <option value="single_product_multi">Tek Ürün Çoklu</option>
+                <option value="mixed">Çok Ürün Çoklu</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-muted-foreground mb-2">Mağaza</label>
+              <select
+                value={suggestionFilters.storeId || ''}
+                onChange={(e) => {
+                  setSuggestionFilters({
+                    ...suggestionFilters,
+                    storeId: e.target.value || undefined,
+                  });
+                }}
+                className="w-full px-2 py-1.5 text-xs border border-input rounded bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary h-[38px]"
+              >
+                <option value="">Tümü</option>
+                {stores.map((store) => (
+                  <option key={store.id} value={store.id}>
+                    {store.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-muted-foreground mb-2">Ürün</label>
               <div className="relative">
-                <div className="flex flex-wrap gap-1.5 p-1.5 min-h-[36px] border border-input rounded bg-muted/20 focus-within:ring-1 focus-within:ring-primary focus-within:border-primary">
-                  {suggestionFilters.productBarcodes.length > 0 && (
+                <div 
+                  className="flex flex-wrap gap-1.5 p-2 border border-input rounded bg-background focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary transition-colors cursor-pointer h-[38px] overflow-y-auto"
+                  onClick={() => setIsProductDropdownOpen(!isProductDropdownOpen)}
+                >
+                  {suggestionFilters.productBarcodes.length === 0 ? (
+                    <span className="text-xs text-muted-foreground flex items-center gap-2 flex-1">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                      Ürün ara...
+                    </span>
+                  ) : (
                     <>
                       {suggestionFilters.productBarcodes.map((barcode) => {
                         const product = products.find((p) => p.barcode === barcode);
@@ -649,7 +968,8 @@ export function RoutesTable() {
                         return (
                           <span
                             key={barcode}
-                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-primary/10 text-primary text-xs"
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-primary/10 text-primary text-xs font-medium border border-primary/20"
+                            onClick={(e) => e.stopPropagation()}
                           >
                             {product.name}
                             <button
@@ -660,7 +980,7 @@ export function RoutesTable() {
                                   productBarcodes: suggestionFilters.productBarcodes.filter((b) => b !== barcode),
                                 });
                               }}
-                              className="hover:text-destructive"
+                              className="hover:text-destructive transition-colors"
                             >
                               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -670,26 +990,19 @@ export function RoutesTable() {
                         );
                       })}
                       <button
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setSuggestionFilters({
                             ...suggestionFilters,
                             productBarcodes: [],
                           });
                         }}
-                        className="text-xs text-muted-foreground hover:text-foreground"
+                        className="text-xs text-muted-foreground hover:text-foreground px-1 transition-colors"
                       >
                         Temizle
                       </button>
                     </>
                   )}
-                  <input
-                    type="text"
-                    placeholder={suggestionFilters.productBarcodes.length === 0 ? "Ara..." : ""}
-                    value={productSearch}
-                    onChange={(e) => setProductSearch(e.target.value)}
-                    onFocus={() => setIsProductDropdownOpen(true)}
-                    className="flex-1 min-w-[100px] bg-transparent border-0 outline-none text-xs placeholder:text-muted-foreground"
-                  />
                 </div>
                 {isProductDropdownOpen && (
                   <>
@@ -697,89 +1010,154 @@ export function RoutesTable() {
                       className="fixed inset-0 z-10"
                       onClick={() => setIsProductDropdownOpen(false)}
                     />
-                    <div className="absolute z-20 w-full mt-1 bg-card border border-border rounded shadow-lg max-h-64 overflow-y-auto">
-                      {products
-                        .filter((product) =>
-                          product.name.toLowerCase().includes(productSearch.toLowerCase()) ||
-                          product.barcode.toLowerCase().includes(productSearch.toLowerCase())
-                        )
-                        .map((product) => {
-                          const isSelected = suggestionFilters.productBarcodes.includes(product.barcode);
-                          return (
-                            <label
-                              key={product.id}
-                              className="flex items-center gap-2 px-2 py-1.5 hover:bg-muted/50 cursor-pointer"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setSuggestionFilters({
-                                      ...suggestionFilters,
-                                      productBarcodes: [...suggestionFilters.productBarcodes, product.barcode],
-                                    });
-                                  } else {
-                                    setSuggestionFilters({
-                                      ...suggestionFilters,
-                                      productBarcodes: suggestionFilters.productBarcodes.filter((b) => b !== product.barcode),
-                                    });
-                                  }
-                                }}
-                                className="rounded border-input cursor-pointer"
-                              />
-                              <div className="flex-1 min-w-0">
-                                <div className="text-xs text-foreground truncate">{product.name}</div>
-                                <div className="text-xs text-muted-foreground font-mono">{product.barcode}</div>
-                              </div>
-                            </label>
-                          );
-                        })}
-                      {products.filter(
-                        (product) =>
-                          product.name.toLowerCase().includes(productSearch.toLowerCase()) ||
-                          product.barcode.toLowerCase().includes(productSearch.toLowerCase())
-                      ).length === 0 && (
-                        <div className="px-2 py-3 text-xs text-muted-foreground text-center">
-                          Bulunamadı
-                        </div>
-                      )}
+                    <div className="absolute z-20 w-full mt-1 bg-card border border-border rounded-lg shadow-xl max-h-64 overflow-hidden">
+                      <div className="p-2 border-b border-border sticky top-0 bg-card">
+                        <input
+                          type="text"
+                          placeholder="Ürün adı veya barkod ara..."
+                          value={productSearch}
+                          onChange={(e) => setProductSearch(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-full px-2 py-1.5 text-xs border border-input rounded bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                        />
+                      </div>
+                      <div className="overflow-y-auto max-h-56">
+                        {products
+                          .filter((product) =>
+                            product.name.toLowerCase().includes(productSearch.toLowerCase()) ||
+                            (product.barcode && product.barcode.toLowerCase().includes(productSearch.toLowerCase()))
+                          )
+                          .map((product) => {
+                            const productBarcode = product.barcode || '';
+                            const isSelected = productBarcode && suggestionFilters.productBarcodes.includes(productBarcode);
+                            return (
+                              <label
+                                key={product.id}
+                                className="flex items-center gap-2 px-3 py-2 hover:bg-muted/50 cursor-pointer transition-colors"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={!!isSelected}
+                                  onChange={(e) => {
+                                    if (!productBarcode) return;
+                                    if (e.target.checked) {
+                                      setSuggestionFilters({
+                                        ...suggestionFilters,
+                                        productBarcodes: [...suggestionFilters.productBarcodes, productBarcode],
+                                      });
+                                    } else {
+                                      setSuggestionFilters({
+                                        ...suggestionFilters,
+                                        productBarcodes: suggestionFilters.productBarcodes.filter((b) => b !== productBarcode),
+                                      });
+                                    }
+                                  }}
+                                  className="rounded border-input cursor-pointer"
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-sm text-foreground truncate font-medium">{product.name}</div>
+                                  <div className="text-xs text-muted-foreground font-mono">{product.barcode || '-'}</div>
+                                </div>
+                              </label>
+                            );
+                          })}
+                        {products.filter(
+                          (product) =>
+                            product.name.toLowerCase().includes(productSearch.toLowerCase()) ||
+                            (product.barcode && product.barcode.toLowerCase().includes(productSearch.toLowerCase()))
+                        ).length === 0 && (
+                          <div className="px-3 py-4 text-xs text-muted-foreground text-center">
+                            Ürün bulunamadı
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </>
                 )}
               </div>
             </div>
+            <div>
+              <label className="block text-xs text-muted-foreground mb-2">Sipariş Sayısı</label>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  placeholder="Min"
+                  value={suggestionFilters.minOrderCount || ''}
+                  onChange={(e) => {
+                    setSuggestionFilters({
+                      ...suggestionFilters,
+                      minOrderCount: e.target.value ? parseInt(e.target.value, 10) : undefined,
+                    });
+                  }}
+                  className="w-full px-2 py-1.5 text-xs border border-input rounded bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary h-[38px]"
+                  min="0"
+                />
+                <input
+                  type="number"
+                  placeholder="Max"
+                  value={suggestionFilters.maxOrderCount || ''}
+                  onChange={(e) => {
+                    setSuggestionFilters({
+                      ...suggestionFilters,
+                      maxOrderCount: e.target.value ? parseInt(e.target.value, 10) : undefined,
+                    });
+                  }}
+                  className="w-full px-2 py-1.5 text-xs border border-input rounded bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary h-[38px]"
+                  min="0"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs text-muted-foreground mb-2">Toplam Adet</label>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  placeholder="Min"
+                  value={suggestionFilters.minTotalQuantity || ''}
+                  onChange={(e) => {
+                    setSuggestionFilters({
+                      ...suggestionFilters,
+                      minTotalQuantity: e.target.value ? parseInt(e.target.value, 10) : undefined,
+                    });
+                  }}
+                  className="w-full px-2 py-1.5 text-xs border border-input rounded bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary h-[38px]"
+                  min="0"
+                />
+                <input
+                  type="number"
+                  placeholder="Max"
+                  value={suggestionFilters.maxTotalQuantity || ''}
+                  onChange={(e) => {
+                    setSuggestionFilters({
+                      ...suggestionFilters,
+                      maxTotalQuantity: e.target.value ? parseInt(e.target.value, 10) : undefined,
+                    });
+                  }}
+                  className="w-full px-2 py-1.5 text-xs border border-input rounded bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary h-[38px]"
+                  min="0"
+                />
+              </div>
+            </div>
           </div>
-        </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-muted/30 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-muted/30 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 <th className="px-6 py-3 w-12"></th>
                 <th className="px-6 py-3">
                   <button
                     onClick={() => handleSort('name')}
                     className="flex items-center gap-1 hover:text-foreground"
                   >
-                    Rota Adı
+                    Ürünler
                     {suggestionSort.sortBy === 'name' && (
                       <span>{suggestionSort.sortOrder === 'ASC' ? '↑' : '↓'}</span>
                     )}
                   </button>
                 </th>
-                <th className="px-6 py-3">
-                  <button
-                    onClick={() => handleSort('type')}
-                    className="flex items-center gap-1 hover:text-foreground"
-                  >
-                    Tip
-                    {suggestionSort.sortBy === 'type' && (
-                      <span>{suggestionSort.sortOrder === 'ASC' ? '↑' : '↓'}</span>
-                    )}
-                  </button>
-                </th>
-                <th className="px-6 py-3">Mağaza</th>
                 <th className="px-6 py-3">
                   <button
                     onClick={() => handleSort('orderCount')}
@@ -802,6 +1180,18 @@ export function RoutesTable() {
                     )}
                   </button>
                 </th>
+                <th className="px-6 py-3">
+                  <button
+                    onClick={() => handleSort('type')}
+                    className="flex items-center gap-1 hover:text-foreground"
+                  >
+                    Tip
+                    {suggestionSort.sortBy === 'type' && (
+                      <span>{suggestionSort.sortOrder === 'ASC' ? '↑' : '↓'}</span>
+                    )}
+                  </button>
+                </th>
+                <th className="px-6 py-3">Mağaza</th>
                 <th className="px-6 py-3">İşlemler</th>
               </tr>
             </thead>
@@ -842,19 +1232,67 @@ export function RoutesTable() {
                         </button>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="text-sm font-medium text-foreground">{suggestion.name}</div>
-                        <div className="text-xs text-muted-foreground mt-1">{suggestion.description}</div>
+                        <div className="flex items-start gap-2 flex-wrap">
+                          {suggestion.products.map((product, idx) => (
+                            <div
+                              key={idx}
+                              className="relative"
+                              onMouseEnter={(e) => {
+                                if (product.imageUrl) {
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  setHoveredProduct({
+                                    imageUrl: product.imageUrl,
+                                    name: product.name,
+                                    x: rect.left + rect.width / 2,
+                                    y: rect.top,
+                                  });
+                                }
+                              }}
+                              onMouseMove={(e) => {
+                                if (product.imageUrl && hoveredProduct?.imageUrl === product.imageUrl) {
+                                  setHoveredProduct({
+                                    imageUrl: product.imageUrl,
+                                    name: product.name,
+                                    x: e.clientX,
+                                    y: e.currentTarget.getBoundingClientRect().top,
+                                  });
+                                }
+                              }}
+                              onMouseLeave={() => {
+                                setHoveredProduct(null);
+                              }}
+                            >
+                              {product.imageUrl ? (
+                                <img
+                                  src={product.imageUrl}
+                                  alt={product.name}
+                                  className="w-14 h-14 rounded border border-border object-contain bg-muted/20 cursor-pointer"
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).style.display = 'none';
+                                  }}
+                                />
+                              ) : (
+                                <div className="w-14 h-14 rounded border border-border bg-muted/50 flex items-center justify-center">
+                                  <svg className="w-7 h-7 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                  </svg>
+                                </div>
+                              )}
+                              <span className="absolute -top-1.5 -right-1.5 bg-primary text-white text-[11px] font-bold rounded-full min-w-[20px] h-5 px-1 flex items-center justify-center leading-none shadow-md">
+                                ×{product.orderCount > 0 ? Math.round(product.totalQuantity / product.orderCount) : product.totalQuantity}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
                       </td>
-                      <td className="px-6 py-4">
-                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${getSuggestionTypeColor(suggestion.type)}`}>
+                      <td className="px-6 py-4 text-sm text-foreground align-middle">{suggestion.orderCount}</td>
+                      <td className="px-6 py-4 text-sm text-foreground align-middle">{suggestion.totalQuantity}</td>
+                      <td className="px-6 py-4 align-middle">
+                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium border whitespace-nowrap ${getSuggestionTypeColor(suggestion.type)}`}>
                           {getSuggestionTypeLabel(suggestion.type)}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-sm text-muted-foreground">
-                        {suggestion.storeName || '-'}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-foreground">{suggestion.orderCount}</td>
-                      <td className="px-6 py-4 text-sm text-foreground">{suggestion.totalQuantity}</td>
+                      <td className="px-6 py-4 text-sm text-foreground align-middle">{suggestion.storeName || '-'}</td>
                       <td className="px-6 py-4">
                         <button
                           onClick={(e) => {
@@ -869,7 +1307,7 @@ export function RoutesTable() {
                     </tr>
                     {expandedRows.has(suggestion.id) && (
                       <tr>
-                        <td colSpan={7} className="px-6 py-4 bg-muted/5">
+                        <td colSpan={6} className="px-6 py-4 bg-muted/5">
                           <div className="space-y-4">
                             <div>
                               <div className="flex items-center justify-between mb-3">
@@ -955,60 +1393,125 @@ export function RoutesTable() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-muted-foreground">
+                  <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">
                     Rota önerisi bulunamadı.
                   </td>
                 </tr>
               )}
-            </tbody>
-          </table>
-        </div>
-
-        {suggestionPagination.totalPages > 1 && (
-          <div className="p-4 border-t border-border flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">
-              Toplam {suggestionPagination.total} öneri, Sayfa {suggestionPagination.page} / {suggestionPagination.totalPages}
+              </tbody>
+            </table>
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  if (suggestionPagination.page > 1) {
-                    setSuggestionPagination({ ...suggestionPagination, page: suggestionPagination.page - 1 });
-                  }
-                }}
-                disabled={suggestionPagination.page === 1}
-                className="px-3 py-1.5 text-sm border border-input rounded-lg hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Önceki
-              </button>
-              <button
-                onClick={() => {
-                  if (suggestionPagination.page < suggestionPagination.totalPages) {
-                    setSuggestionPagination({ ...suggestionPagination, page: suggestionPagination.page + 1 });
-                  }
-                }}
-                disabled={suggestionPagination.page === suggestionPagination.totalPages}
-                className="px-3 py-1.5 text-sm border border-input rounded-lg hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Sonraki
-              </button>
+
+            <div className="p-4 border-t border-border flex items-center justify-between">
+                <div className="text-sm text-muted-foreground">
+                  Toplam {suggestionPagination.total} öneri{suggestionPagination.totalPages > 1 && `, Sayfa ${suggestionPagination.page} / ${suggestionPagination.totalPages}`}
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-muted-foreground">Sayfa başına:</label>
+                    <select
+                      value={suggestionPagination.limit}
+                      onChange={(e) => {
+                        setSuggestionPagination({
+                          ...suggestionPagination,
+                          limit: parseInt(e.target.value, 10),
+                          page: 1,
+                        });
+                      }}
+                      className="px-2 py-1 text-xs border border-input rounded bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    >
+                      <option value="10">10</option>
+                      <option value="25">25</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                    </select>
+                  </div>
+                  {suggestionPagination.totalPages > 1 && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          if (suggestionPagination.page > 1) {
+                            setSuggestionPagination({ ...suggestionPagination, page: suggestionPagination.page - 1 });
+                          }
+                        }}
+                        disabled={suggestionPagination.page === 1}
+                        className="px-3 py-1.5 text-sm border border-input rounded-lg hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Önceki
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (suggestionPagination.page < suggestionPagination.totalPages) {
+                            setSuggestionPagination({ ...suggestionPagination, page: suggestionPagination.page + 1 });
+                          }
+                        }}
+                        disabled={suggestionPagination.page === suggestionPagination.totalPages}
+                        className="px-3 py-1.5 text-sm border border-input rounded-lg hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Sonraki
+                      </button>
+                    </div>
+                  )}
             </div>
           </div>
-        )}
-      </div>
+        </>
+      )}
+    </div>
+      {hoveredProduct && (
+        <div
+          className="fixed z-50 pointer-events-none"
+          style={{
+            left: `${Math.min(Math.max(hoveredProduct.x, 150), window.innerWidth - 150)}px`,
+            top: `${Math.max(hoveredProduct.y - 320, 10)}px`,
+            transform: 'translateX(-50%)',
+          }}
+        >
+          <div className="bg-card border border-border rounded-lg shadow-2xl p-3 w-[300px]">
+            <img
+              src={hoveredProduct.imageUrl}
+              alt={hoveredProduct.name}
+              className="w-full h-[280px] object-contain rounded bg-muted/10"
+            />
+            <div className="mt-2 text-xs text-center text-foreground font-medium truncate">
+              {hoveredProduct.name}
+            </div>
+          </div>
+        </div>
+      )}
 
       {isFilterModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto"
           onClick={(e) => {
-            if (e.target === e.currentTarget) setIsFilterModalOpen(false);
+            if (e.target === e.currentTarget) {
+              setIsFilterModalOpen(false);
+              setFilterData({
+                productBarcodes: [],
+                brand: undefined,
+                type: undefined,
+                minOrderCount: undefined,
+                maxOrderCount: undefined,
+                minTotalQuantity: undefined,
+                maxTotalQuantity: undefined,
+              });
+            }
           }}
         >
           <div className="bg-card w-full max-w-4xl rounded-xl shadow-2xl border border-border my-8">
             <div className="flex justify-between items-center p-6 border-b border-border">
               <h3 className="text-xl font-bold text-foreground">Sipariş Filtrele</h3>
               <button
-                onClick={() => setIsFilterModalOpen(false)}
+                onClick={() => {
+                  setIsFilterModalOpen(false);
+                  setFilterData({
+                    productBarcodes: [],
+                    type: undefined,
+                    minOrderCount: undefined,
+                    maxOrderCount: undefined,
+                    minTotalQuantity: undefined,
+                    maxTotalQuantity: undefined,
+                  });
+                }}
                 className="text-muted-foreground hover:text-foreground"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1018,98 +1521,218 @@ export function RoutesTable() {
             </div>
             <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Mağaza</label>
+                <label className="block text-sm font-medium text-foreground mb-2">Tip</label>
                 <select
-                  value={filterData.storeId}
-                  onChange={(e) => setFilterData({ ...filterData, storeId: e.target.value })}
+                  value={filterData.type || ''}
+                  onChange={(e) => {
+                    setFilterData({
+                      ...filterData,
+                      type: e.target.value || undefined,
+                    });
+                  }}
                   className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-muted/20"
                 >
-                  <option value="">Tüm Mağazalar</option>
-                  {stores.map((store) => (
-                    <option key={store.id} value={store.id}>
-                      {store.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Durum</label>
-                <select
-                  value={filterData.status}
-                  onChange={(e) => setFilterData({ ...filterData, status: e.target.value })}
-                  className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-muted/20"
-                >
-                  <option value="">Tüm Durumlar</option>
-                  <option value="PENDING">Beklemede</option>
-                  <option value="PROCESSING">İşleniyor</option>
+                  <option value="">Tümü</option>
+                  <option value="single_product">Tekli Ürün</option>
+                  <option value="single_product_multi">Tek Ürün Çoklu</option>
+                  <option value="mixed">Çok Ürün Çoklu</option>
                 </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">Ürünler</label>
-                <div className="max-h-40 overflow-y-auto border border-input rounded-lg p-2">
-                  {products.length === 0 ? (
-                    <div className="text-sm text-muted-foreground py-2 text-center">
-                      Ürün bulunamadı
-                    </div>
-                  ) : (
-                    products.map((product) => (
-                      <label key={product.id} className="flex items-center space-x-2 py-1 hover:bg-muted/20 rounded px-1 cursor-pointer">
+                <div className="relative">
+                  <div
+                    className="w-full px-3 py-2 border border-input rounded-lg bg-background focus-within:ring-2 focus-within:ring-primary focus-within:border-primary min-h-[38px] flex flex-wrap gap-1 items-center cursor-text"
+                    onClick={() => setIsFilterProductDropdownOpen(!isFilterProductDropdownOpen)}
+                  >
+                    {filterData.productBarcodes.length === 0 ? (
+                      <input
+                        type="text"
+                        placeholder="Ürün ara..."
+                        value={filterProductSearch}
+                        onChange={(e) => {
+                          setFilterProductSearch(e.target.value);
+                          setIsFilterProductDropdownOpen(true);
+                        }}
+                        onFocus={() => setIsFilterProductDropdownOpen(true)}
+                        className="flex-1 outline-none bg-transparent text-sm"
+                      />
+                    ) : (
+                      <>
+                        {filterData.productBarcodes.map((barcode) => {
+                          const product = products.find((p) => p.barcode === barcode);
+                          if (!product) return null;
+                          return (
+                            <span
+                              key={barcode}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-primary/10 text-primary text-xs font-medium"
+                            >
+                              {product.name}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setFilterData({
+                                    ...filterData,
+                                    productBarcodes: filterData.productBarcodes.filter((b) => b !== barcode),
+                                  });
+                                }}
+                                className="hover:bg-primary/20 rounded"
+                              >
+                                ×
+                              </button>
+                            </span>
+                          );
+                        })}
                         <input
-                          type="checkbox"
-                          checked={filterData.productIds.includes(product.id)}
+                          type="text"
+                          placeholder="Ürün ara..."
+                          value={filterProductSearch}
                           onChange={(e) => {
-                            if (e.target.checked) {
-                              setFilterData({
-                                ...filterData,
-                                productIds: [...filterData.productIds, product.id],
-                              });
-                            } else {
-                              setFilterData({
-                                ...filterData,
-                                productIds: filterData.productIds.filter((id) => id !== product.id),
-                              });
-                            }
+                            setFilterProductSearch(e.target.value);
+                            setIsFilterProductDropdownOpen(true);
                           }}
-                          className="rounded border-input cursor-pointer"
+                          onFocus={() => setIsFilterProductDropdownOpen(true)}
+                          className="flex-1 min-w-[120px] outline-none bg-transparent text-sm"
                         />
-                        <span className="text-sm text-foreground">{product.name}</span>
-                      </label>
-                    ))
+                      </>
+                    )}
+                  </div>
+                  {isFilterProductDropdownOpen && (
+                    <div className="absolute z-10 w-full mt-1 bg-card border border-border rounded-lg shadow-lg max-h-56 overflow-y-auto">
+                      <div className="p-2">
+                        {products
+                          .filter((product) =>
+                            product.name.toLowerCase().includes(filterProductSearch.toLowerCase()) ||
+                            (product.barcode && product.barcode.toLowerCase().includes(filterProductSearch.toLowerCase()))
+                          )
+                          .map((product) => {
+                            const productBarcode = product.barcode || '';
+                            const isSelected = productBarcode && filterData.productBarcodes.includes(productBarcode);
+                            return (
+                              <label
+                                key={product.id}
+                                className="flex items-center gap-2 px-3 py-2 hover:bg-muted/50 cursor-pointer transition-colors"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={!!isSelected}
+                                  onChange={(e) => {
+                                    if (!productBarcode) return;
+                                    if (e.target.checked) {
+                                      setFilterData({
+                                        ...filterData,
+                                        productBarcodes: [...filterData.productBarcodes, productBarcode],
+                                      });
+                                    } else {
+                                      setFilterData({
+                                        ...filterData,
+                                        productBarcodes: filterData.productBarcodes.filter((b) => b !== productBarcode),
+                                      });
+                                    }
+                                  }}
+                                  className="rounded border-input cursor-pointer"
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-sm text-foreground truncate font-medium">{product.name}</div>
+                                  <div className="text-xs text-muted-foreground font-mono">{product.barcode || '-'}</div>
+                                </div>
+                              </label>
+                            );
+                          })}
+                        {products.filter(
+                          (product) =>
+                            product.name.toLowerCase().includes(filterProductSearch.toLowerCase()) ||
+                            (product.barcode && product.barcode.toLowerCase().includes(filterProductSearch.toLowerCase()))
+                        ).length === 0 && (
+                          <div className="px-3 py-4 text-xs text-muted-foreground text-center">
+                            Ürün bulunamadı
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Miktarlar</label>
-                <div className="flex flex-wrap gap-2">
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((qty) => (
-                    <label key={qty} className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        checked={filterData.quantities.includes(qty)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setFilterData({
-                              ...filterData,
-                              quantities: [...filterData.quantities, qty],
-                            });
-                          } else {
-                            setFilterData({
-                              ...filterData,
-                              quantities: filterData.quantities.filter((q) => q !== qty),
-                            });
-                          }
-                        }}
-                        className="rounded border-input"
-                      />
-                      <span className="text-sm text-foreground">{qty}</span>
-                    </label>
-                  ))}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">Sipariş Sayısı (Min)</label>
+                  <input
+                    type="number"
+                    value={filterData.minOrderCount || ''}
+                    onChange={(e) => {
+                      setFilterData({
+                        ...filterData,
+                        minOrderCount: e.target.value ? parseInt(e.target.value, 10) : undefined,
+                      });
+                    }}
+                    className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-muted/20"
+                    min="0"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">Sipariş Sayısı (Max)</label>
+                  <input
+                    type="number"
+                    value={filterData.maxOrderCount || ''}
+                    onChange={(e) => {
+                      setFilterData({
+                        ...filterData,
+                        maxOrderCount: e.target.value ? parseInt(e.target.value, 10) : undefined,
+                      });
+                    }}
+                    className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-muted/20"
+                    min="0"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">Toplam Adet (Min)</label>
+                  <input
+                    type="number"
+                    value={filterData.minTotalQuantity || ''}
+                    onChange={(e) => {
+                      setFilterData({
+                        ...filterData,
+                        minTotalQuantity: e.target.value ? parseInt(e.target.value, 10) : undefined,
+                      });
+                    }}
+                    className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-muted/20"
+                    min="0"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">Toplam Adet (Max)</label>
+                  <input
+                    type="number"
+                    value={filterData.maxTotalQuantity || ''}
+                    onChange={(e) => {
+                      setFilterData({
+                        ...filterData,
+                        maxTotalQuantity: e.target.value ? parseInt(e.target.value, 10) : undefined,
+                      });
+                    }}
+                    className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-muted/20"
+                    min="0"
+                  />
                 </div>
               </div>
               <div className="flex justify-end space-x-3 pt-4">
                 <button
                   type="button"
-                  onClick={() => setIsFilterModalOpen(false)}
+                  onClick={() => {
+                    setIsFilterModalOpen(false);
+                    setFilterData({
+                      productBarcodes: [],
+                      type: undefined,
+                      minOrderCount: undefined,
+                      maxOrderCount: undefined,
+                      minTotalQuantity: undefined,
+                      maxTotalQuantity: undefined,
+                    });
+                  }}
                   className="px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted rounded-lg transition-colors"
                 >
                   İptal
@@ -1131,88 +1754,12 @@ export function RoutesTable() {
         </div>
       )}
 
-      {filteredOrders.length > 0 && !isModalOpen && (
-        <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-border flex justify-between items-center">
-            <h3 className="text-lg font-bold text-foreground">
-              Filtrelenmiş Siparişler ({filteredOrders.length})
-            </h3>
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium"
-            >
-              Rota Oluştur
-            </button>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-muted/30 border-b border-border text-xs font-semibold text-muted-foreground uppercase">
-                  <th className="px-6 py-3">
-                    <input
-                      type="checkbox"
-                      checked={formData.selectedOrderIds.length === filteredOrders.length && filteredOrders.length > 0}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setFormData({
-                            ...formData,
-                            selectedOrderIds: filteredOrders.map((o) => o.id),
-                          });
-                        } else {
-                          setFormData({ ...formData, selectedOrderIds: [] });
-                        }
-                      }}
-                      className="rounded border-input"
-                    />
-                  </th>
-                  <th className="px-6 py-3">Sipariş No</th>
-                  <th className="px-6 py-3">Mağaza</th>
-                  <th className="px-6 py-3">Müşteri</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {filteredOrders.map((order) => (
-                  <tr key={order.id} className="hover:bg-muted/20">
-                    <td className="px-6 py-4">
-                      <input
-                        type="checkbox"
-                        checked={formData.selectedOrderIds.includes(order.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setFormData({
-                              ...formData,
-                              selectedOrderIds: [...formData.selectedOrderIds, order.id],
-                            });
-                          } else {
-                            setFormData({
-                              ...formData,
-                              selectedOrderIds: formData.selectedOrderIds.filter((id) => id !== order.id),
-                            });
-                          }
-                        }}
-                        className="rounded border-input"
-                      />
-                    </td>
-                    <td className="px-6 py-4 text-sm font-medium text-foreground">{order.orderNumber}</td>
-                    <td className="px-6 py-4 text-sm text-muted-foreground">{order.store?.name || '-'}</td>
-                    <td className="px-6 py-4 text-sm text-foreground">
-                      {order.customerFirstName} {order.customerLastName}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
       {isModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
-              setIsModalOpen(false);
-              setSelectedSuggestion(null);
+              closeCreateModal();
             }
           }}
         >
@@ -1222,10 +1769,7 @@ export function RoutesTable() {
                 {selectedSuggestion ? 'Önerilen Rotayı Oluştur' : 'Yeni Rota Oluştur'}
               </h3>
               <button
-                onClick={() => {
-                  setIsModalOpen(false);
-                  setSelectedSuggestion(null);
-                }}
+                onClick={closeCreateModal}
                 className="text-muted-foreground hover:text-foreground"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1249,6 +1793,21 @@ export function RoutesTable() {
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-muted/20"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Mağaza</label>
+                <select
+                  value={formData.storeId || ''}
+                  onChange={(e) => setFormData({ ...formData, storeId: e.target.value || undefined })}
+                  className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-muted/20"
+                >
+                  <option value="">Seçiniz (Opsiyonel)</option>
+                  {stores.map((store) => (
+                    <option key={store.id} value={store.id}>
+                      {store.name}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">Açıklama</label>
@@ -1321,10 +1880,7 @@ export function RoutesTable() {
               <div className="pt-4 flex justify-end space-x-3">
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsModalOpen(false);
-                    setSelectedSuggestion(null);
-                  }}
+                  onClick={closeCreateModal}
                   className="px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted rounded-lg transition-colors"
                 >
                   İptal

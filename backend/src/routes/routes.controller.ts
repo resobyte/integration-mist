@@ -41,18 +41,22 @@ export class RoutesController {
 
   @Get('filter-orders')
   getFilteredOrders(
-    @Query('productIds', new ParseArrayPipe({ items: String, optional: true }))
-    productIds?: string[],
-    @Query('quantities', new ParseArrayPipe({ items: Number, optional: true }))
-    quantities?: number[],
-    @Query('storeId') storeId?: string,
-    @Query('status') status?: string,
+    @Query('productBarcodes') productBarcodes?: string,
+    @Query('brand') brand?: string,
+    @Query('type') type?: string,
+    @Query('minOrderCount') minOrderCount?: string,
+    @Query('maxOrderCount') maxOrderCount?: string,
+    @Query('minTotalQuantity') minTotalQuantity?: string,
+    @Query('maxTotalQuantity') maxTotalQuantity?: string,
   ) {
     const filter: RouteFilterDto = {
-      productIds,
-      quantities,
-      storeId,
-      status,
+      productBarcodes: productBarcodes ? productBarcodes.split(',').filter(Boolean) : undefined,
+      brand,
+      type,
+      minOrderCount: minOrderCount ? parseInt(minOrderCount, 10) : undefined,
+      maxOrderCount: maxOrderCount ? parseInt(maxOrderCount, 10) : undefined,
+      minTotalQuantity: minTotalQuantity ? parseInt(minTotalQuantity, 10) : undefined,
+      maxTotalQuantity: maxTotalQuantity ? parseInt(maxTotalQuantity, 10) : undefined,
     };
     return this.routesService.getFilteredOrders(filter);
   }
@@ -64,8 +68,12 @@ export class RoutesController {
     @Query('limit') limit?: string,
     @Query('sortBy') sortBy?: string,
     @Query('sortOrder') sortOrder?: 'ASC' | 'DESC',
-    @Query('type', new ParseArrayPipe({ items: String, optional: true, separator: ',' })) type?: string[],
+    @Query('type') type?: string,
     @Query('productBarcodes', new ParseArrayPipe({ items: String, optional: true, separator: ',' })) productBarcodes?: string[],
+    @Query('minOrderCount') minOrderCount?: string,
+    @Query('maxOrderCount') maxOrderCount?: string,
+    @Query('minTotalQuantity') minTotalQuantity?: string,
+    @Query('maxTotalQuantity') maxTotalQuantity?: string,
   ) {
     const paginationDto: PaginationDto = {
       page: page ? parseInt(page, 10) : 1,
@@ -73,7 +81,17 @@ export class RoutesController {
       sortBy,
       sortOrder: sortOrder || 'DESC',
     };
-    return this.routesService.getRouteSuggestions(storeId, paginationDto, type, productBarcodes);
+    const finalStoreId = storeId || (paginationDto as any).storeId;
+    return this.routesService.getRouteSuggestions(
+      finalStoreId,
+      paginationDto,
+      type ? [type] : undefined,
+      productBarcodes,
+      minOrderCount ? parseInt(minOrderCount, 10) : undefined,
+      maxOrderCount ? parseInt(maxOrderCount, 10) : undefined,
+      minTotalQuantity ? parseInt(minTotalQuantity, 10) : undefined,
+      maxTotalQuantity ? parseInt(maxTotalQuantity, 10) : undefined,
+    );
   }
 
   @Post(':id/print-label')

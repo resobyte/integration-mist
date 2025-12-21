@@ -10,6 +10,7 @@ import { randomUUID } from 'crypto';
 import { Route, RouteStatus } from './entities/route.entity';
 import { RouteOrder } from './entities/route-order.entity';
 import { Order, OrderStatus } from '../orders/entities/order.entity';
+import { Product } from '../products/entities/product.entity';
 import { CreateRouteDto } from './dto/create-route.dto';
 import { RouteFilterDto } from './dto/route-filter.dto';
 import { RouteResponseDto } from './dto/route-response.dto';
@@ -30,6 +31,8 @@ export class RoutesService {
     private readonly routeOrderRepository: Repository<RouteOrder>,
     @InjectRepository(Order)
     private readonly orderRepository: Repository<Order>,
+    @InjectRepository(Product)
+    private readonly productRepository: Repository<Product>,
     private readonly ordersService: OrdersService,
     private readonly trendyolApiService: TrendyolApiService,
     private readonly zplLabelService: ZplLabelService,
@@ -115,37 +118,93 @@ export class RoutesService {
         excludedStatuses: [OrderStatus.COLLECTING, OrderStatus.PACKED],
       });
 
-    if (filter.storeId) {
-      queryBuilder.andWhere('order.storeId = :storeId', { storeId: filter.storeId });
-    }
-
-    if (filter.status) {
-      queryBuilder.andWhere('order.status = :status', { status: filter.status });
-    }
-
     const orders = await queryBuilder.getMany();
 
     let filteredOrders = orders;
 
-    if (filter.productIds && filter.productIds.length > 0) {
-      filteredOrders = orders.filter((order) => {
+    if (filter.brand) {
+      const allBarcodes = new Set<string>();
+      orders.forEach((order) => {
+        if (order.lines && Array.isArray(order.lines)) {
+          order.lines.forEach((line: any) => {
+            const barcode = line.barcode || line.productBarcode;
+            if (barcode) allBarcodes.add(barcode);
+          });
+        }
+      });
+
+      if (allBarcodes.size > 0) {
+        const products = await this.productRepository.find({
+          where: { barcode: In(Array.from(allBarcodes)) },
+          select: ['barcode', 'brand'],
+        });
+
+        const brandBarcodes = new Set(
+          products.filter((p) => p.brand === filter.brand).map((p) => p.barcode).filter(Boolean)
+        );
+
+        filteredOrders = filteredOrders.filter((order) => {
+          if (!order.lines || !Array.isArray(order.lines)) return false;
+
+          const orderBarcodes = order.lines
+            .map((line: any) => line.barcode || line.productBarcode)
+            .filter(Boolean);
+
+          return orderBarcodes.some((barcode) => brandBarcodes.has(barcode));
+        });
+      } else {
+        filteredOrders = [];
+      }
+    }
+
+    if (filter.productBarcodes && filter.productBarcodes.length > 0) {
+      filteredOrders = filteredOrders.filter((order) => {
         if (!order.lines || !Array.isArray(order.lines)) return false;
 
         const orderBarcodes = order.lines
           .map((line: any) => line.barcode || line.productBarcode)
           .filter(Boolean);
 
-        return filter.productIds!.some((productId) => orderBarcodes.includes(productId));
+        return filter.productBarcodes!.some((barcode) => orderBarcodes.includes(barcode));
       });
     }
 
-    if (filter.quantities && filter.quantities.length > 0) {
+    if (filter.minOrderCount !== undefined || filter.maxOrderCount !== undefined || 
+        filter.minTotalQuantity !== undefined || filter.maxTotalQuantity !== undefined) {
       filteredOrders = filteredOrders.filter((order) => {
         if (!order.lines || !Array.isArray(order.lines)) return false;
 
-        const orderQuantities = order.lines.map((line: any) => line.quantity || 0);
+        const totalQuantity = order.lines.reduce((sum: number, line: any) => sum + (line.quantity || 0), 0);
+        const orderCount = 1;
 
-        return filter.quantities!.some((qty) => orderQuantities.includes(qty));
+        if (filter.minOrderCount !== undefined && orderCount < filter.minOrderCount) return false;
+        if (filter.maxOrderCount !== undefined && orderCount > filter.maxOrderCount) return false;
+        if (filter.minTotalQuantity !== undefined && totalQuantity < filter.minTotalQuantity) return false;
+        if (filter.maxTotalQuantity !== undefined && totalQuantity > filter.maxTotalQuantity) return false;
+
+        return true;
+      });
+    }
+
+    if (filter.type) {
+      filteredOrders = filteredOrders.filter((order) => {
+        if (!order.lines || !Array.isArray(order.lines)) return false;
+
+        const uniqueProducts = new Set(
+          order.lines
+            .map((line: any) => line.barcode || line.productBarcode)
+            .filter(Boolean)
+        );
+
+        if (filter.type === 'single_product') {
+          return uniqueProducts.size === 1 && order.lines.every((line: any) => (line.quantity || 0) === 1);
+        } else if (filter.type === 'single_product_multi') {
+          return uniqueProducts.size === 1 && order.lines.some((line: any) => (line.quantity || 0) > 1);
+        } else if (filter.type === 'mixed') {
+          return uniqueProducts.size > 1;
+        }
+
+        return true;
       });
     }
 
@@ -278,6 +337,10 @@ export class RoutesService {
     paginationDto?: PaginationDto,
     typeFilter?: string[],
     productBarcodes?: string[],
+    minOrderCount?: number,
+    maxOrderCount?: number,
+    minTotalQuantity?: number,
+    maxTotalQuantity?: number,
   ): Promise<PaginationResponse<RouteSuggestion>> {
     const excludedStatuses = [
       OrderStatus.COLLECTING,
@@ -394,12 +457,32 @@ export class RoutesService {
         }
       }
 
+      const allBarcodes = new Set<string>();
+      for (const orderInfo of orderInfos) {
+        for (const product of orderInfo.products) {
+          allBarcodes.add(product.barcode);
+        }
+      }
+
+      const productsByBarcode = new Map<string, Product>();
+      if (allBarcodes.size > 0) {
+        const products = await this.productRepository.find({
+          where: { barcode: In(Array.from(allBarcodes)) },
+        });
+        for (const product of products) {
+          if (product.barcode) {
+            productsByBarcode.set(product.barcode, product);
+          }
+        }
+      }
+
       let priorityCounter = 10000;
 
       for (const [barcode, orderList] of singleProductSingleQty) {
         if (orderList.length === 0) continue;
 
         const product = orderList[0].products.find(p => p.barcode === barcode)!;
+        const dbProduct = productsByBarcode.get(barcode);
         const totalQty = orderList.reduce((sum, o) => sum + o.totalQuantity, 0);
 
         suggestions.push({
@@ -416,6 +499,7 @@ export class RoutesService {
             name: product.name,
             orderCount: orderList.length,
             totalQuantity: totalQty,
+            imageUrl: dbProduct?.imageUrl || null,
           }],
           orders: orderList,
           priority: priorityCounter--,
@@ -432,6 +516,7 @@ export class RoutesService {
           const product = orderList[0].products.find(p => p.barcode === barcode)!;
           const totalQty = orderList.reduce((sum, o) => sum + o.totalQuantity, 0);
 
+          const dbProduct = productsByBarcode.get(barcode);
           suggestions.push({
             id: `${storeKey}-single-${barcode}-qty-${quantity}`,
             type: 'single_product_multi',
@@ -446,6 +531,7 @@ export class RoutesService {
               name: product.name,
               orderCount: orderList.length,
               totalQuantity: totalQty,
+              imageUrl: dbProduct?.imageUrl || null,
             }],
             orders: orderList,
             priority: priorityCounter--,
@@ -489,12 +575,16 @@ export class RoutesService {
           storeId: storeKey !== 'no-store' ? storeKey : undefined,
           orderCount: orderList.length,
           totalQuantity: totalQty,
-          products: Array.from(productCounts.entries()).map(([bc, info]) => ({
-            barcode: bc,
-            name: info.name,
-            orderCount: info.count,
-            totalQuantity: info.quantity,
-          })),
+          products: Array.from(productCounts.entries()).map(([bc, info]) => {
+            const dbProduct = productsByBarcode.get(bc);
+            return {
+              barcode: bc,
+              name: info.name,
+              orderCount: info.count,
+              totalQuantity: info.quantity,
+              imageUrl: dbProduct?.imageUrl || null,
+            };
+          }),
           orders: orderList,
           priority: priorityCounter--,
         });
@@ -511,6 +601,22 @@ export class RoutesService {
       filteredSuggestions = filteredSuggestions.filter((s) =>
         s.products.some((p) => productBarcodes.includes(p.barcode)),
       );
+    }
+
+    if (minOrderCount !== undefined) {
+      filteredSuggestions = filteredSuggestions.filter((s) => s.orderCount >= minOrderCount);
+    }
+
+    if (maxOrderCount !== undefined) {
+      filteredSuggestions = filteredSuggestions.filter((s) => s.orderCount <= maxOrderCount);
+    }
+
+    if (minTotalQuantity !== undefined) {
+      filteredSuggestions = filteredSuggestions.filter((s) => s.totalQuantity >= minTotalQuantity);
+    }
+
+    if (maxTotalQuantity !== undefined) {
+      filteredSuggestions = filteredSuggestions.filter((s) => s.totalQuantity <= maxTotalQuantity);
     }
 
     const sortBy = paginationDto?.sortBy || 'priority';
@@ -599,6 +705,7 @@ interface RouteSuggestionProduct {
   name: string;
   orderCount: number;
   totalQuantity: number;
+  imageUrl: string | null;
 }
 
 export interface RouteSuggestion {

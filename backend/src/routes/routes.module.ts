@@ -5,12 +5,13 @@ import { RoutesController } from './routes.controller';
 import { Route } from './entities/route.entity';
 import { RouteOrder } from './entities/route-order.entity';
 import { Order } from '../orders/entities/order.entity';
+import { Product } from '../products/entities/product.entity';
 import { OrdersModule } from '../orders/orders.module';
 import { ZplLabelService } from './zpl-label.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Route, RouteOrder, Order]),
+    TypeOrmModule.forFeature([Route, RouteOrder, Order, Product]),
     OrdersModule,
   ],
   controllers: [RoutesController],

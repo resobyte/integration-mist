@@ -25,6 +25,10 @@ export class RouteFilterDto {
   type?: string;
 
   @IsOptional()
+  @IsString()
+  storeId?: string;
+
+  @IsOptional()
   @Type(() => Number)
   @IsNumber()
   minOrderCount?: number;

@@ -13,13 +13,13 @@ interface RouteFormData {
   name: string;
   description: string;
   selectedOrderIds: string[];
-  storeId?: string;
 }
 
 interface FilterData {
   productBarcodes: string[];
   brand?: string;
   type?: string;
+  storeId?: string;
   minOrderCount?: number;
   maxOrderCount?: number;
   minTotalQuantity?: number;
@@ -77,12 +77,12 @@ export function RoutesTable() {
     name: '',
     description: '',
     selectedOrderIds: [],
-    storeId: undefined,
   });
   const [filterData, setFilterData] = useState<FilterData>({
     productBarcodes: [],
     brand: undefined,
     type: undefined,
+    storeId: undefined,
     minOrderCount: undefined,
     maxOrderCount: undefined,
     minTotalQuantity: undefined,
@@ -299,6 +299,9 @@ export function RoutesTable() {
       if (filterData.type) {
         params.type = filterData.type;
       }
+      if (filterData.storeId) {
+        params.storeId = filterData.storeId;
+      }
       if (filterData.minOrderCount !== undefined) {
         params.minOrderCount = filterData.minOrderCount;
       }
@@ -335,7 +338,6 @@ export function RoutesTable() {
         name: formData.name,
         description: formData.description || undefined,
         orderIds: formData.selectedOrderIds,
-        storeId: formData.storeId,
       });
       showSuccess('Rota başarıyla oluşturuldu');
       setIsModalOpen(false);
@@ -355,7 +357,7 @@ export function RoutesTable() {
   const closeCreateModal = () => {
     setIsModalOpen(false);
     setSelectedSuggestion(null);
-    setFormData({ name: '', description: '', selectedOrderIds: [], storeId: undefined });
+    setFormData({ name: '', description: '', selectedOrderIds: [] });
   };
 
   const handleSelectSuggestion = (suggestion: RouteSuggestion) => {
@@ -364,7 +366,6 @@ export function RoutesTable() {
       name: suggestion.name,
       description: suggestion.description,
       selectedOrderIds: suggestion.orders.map((o) => o.id),
-      storeId: suggestion.storeId,
     });
     setIsModalOpen(true);
   };
@@ -586,26 +587,36 @@ export function RoutesTable() {
                         : '-'}
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex gap-2">
+                      <div className="flex gap-3">
                         <button
                           onClick={() => setSelectedRoute(route)}
-                          className="text-primary hover:text-primary-dark text-sm font-medium"
+                          className="text-primary hover:text-primary-dark text-sm font-medium flex items-center transition-colors group"
                         >
+                          <svg className="w-4 h-4 mr-1.5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
                           Detay
                         </button>
                         {route.status !== RouteStatus.COMPLETED && route.status !== RouteStatus.CANCELLED && (
                           <button
                             onClick={() => handlePrintLabel(route.id)}
-                            className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                            className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center transition-colors group"
                           >
+                            <svg className="w-4 h-4 mr-1.5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                            </svg>
                             Etiket Yazdır
                           </button>
                         )}
                         {route.status !== RouteStatus.COMPLETED && route.status !== RouteStatus.CANCELLED && (
                           <button
                             onClick={() => handleDeleteRoute(route.id)}
-                            className="text-destructive hover:text-destructive-dark text-sm font-medium"
+                            className="text-destructive hover:text-destructive-dark text-sm font-medium flex items-center transition-colors group"
                           >
+                            <svg className="w-4 h-4 mr-1.5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
                             İptal Et
                           </button>
                         )}
@@ -1489,6 +1500,7 @@ export function RoutesTable() {
                 productBarcodes: [],
                 brand: undefined,
                 type: undefined,
+                storeId: undefined,
                 minOrderCount: undefined,
                 maxOrderCount: undefined,
                 minTotalQuantity: undefined,
@@ -1506,6 +1518,7 @@ export function RoutesTable() {
                   setFilterData({
                     productBarcodes: [],
                     type: undefined,
+                    storeId: undefined,
                     minOrderCount: undefined,
                     maxOrderCount: undefined,
                     minTotalQuantity: undefined,
@@ -1536,6 +1549,26 @@ export function RoutesTable() {
                   <option value="single_product">Tekli Ürün</option>
                   <option value="single_product_multi">Tek Ürün Çoklu</option>
                   <option value="mixed">Çok Ürün Çoklu</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Mağaza</label>
+                <select
+                  value={filterData.storeId || ''}
+                  onChange={(e) => {
+                    setFilterData({
+                      ...filterData,
+                      storeId: e.target.value || undefined,
+                    });
+                  }}
+                  className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-muted/20"
+                >
+                  <option value="">Tümü</option>
+                  {stores.map((store) => (
+                    <option key={store.id} value={store.id}>
+                      {store.name}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div>
@@ -1793,21 +1826,6 @@ export function RoutesTable() {
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-muted/20"
                 />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-1">Mağaza</label>
-                <select
-                  value={formData.storeId || ''}
-                  onChange={(e) => setFormData({ ...formData, storeId: e.target.value || undefined })}
-                  className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-muted/20"
-                >
-                  <option value="">Seçiniz (Opsiyonel)</option>
-                  {stores.map((store) => (
-                    <option key={store.id} value={store.id}>
-                      {store.name}
-                    </option>
-                  ))}
-                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">Açıklama</label>

@@ -115,8 +115,18 @@ export class RoutesService {
       .createQueryBuilder('order')
       .leftJoinAndSelect('order.store', 'store')
       .where('order.status NOT IN (:...excludedStatuses)', {
-        excludedStatuses: [OrderStatus.COLLECTING, OrderStatus.PACKED],
+        excludedStatuses: [
+          OrderStatus.COLLECTING,
+          OrderStatus.PACKED,
+          OrderStatus.SHIPPED,
+          OrderStatus.DELIVERED,
+          OrderStatus.CANCELLED,
+        ],
       });
+
+    if (filter.storeId && filter.storeId !== 'undefined' && filter.storeId !== 'null') {
+      queryBuilder.andWhere('store.id = :storeId', { storeId: filter.storeId });
+    }
 
     const orders = await queryBuilder.getMany();
 

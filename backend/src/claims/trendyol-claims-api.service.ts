@@ -140,7 +140,7 @@ export class TrendyolClaimsApiService {
       const params: GetClaimsParams = {
         page,
         size: 200,
-        claimItemStatus: 'Created',
+        claimItemStatus: status || 'Created',
       };
 
       const response = await this.getClaims(sellerId, apiKey, apiSecret, params);

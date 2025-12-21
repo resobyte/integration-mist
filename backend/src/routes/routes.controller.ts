@@ -40,24 +40,7 @@ export class RoutesController {
   }
 
   @Get('filter-orders')
-  getFilteredOrders(
-    @Query('productBarcodes') productBarcodes?: string,
-    @Query('brand') brand?: string,
-    @Query('type') type?: string,
-    @Query('minOrderCount') minOrderCount?: string,
-    @Query('maxOrderCount') maxOrderCount?: string,
-    @Query('minTotalQuantity') minTotalQuantity?: string,
-    @Query('maxTotalQuantity') maxTotalQuantity?: string,
-  ) {
-    const filter: RouteFilterDto = {
-      productBarcodes: productBarcodes ? productBarcodes.split(',').filter(Boolean) : undefined,
-      brand,
-      type,
-      minOrderCount: minOrderCount ? parseInt(minOrderCount, 10) : undefined,
-      maxOrderCount: maxOrderCount ? parseInt(maxOrderCount, 10) : undefined,
-      minTotalQuantity: minTotalQuantity ? parseInt(minTotalQuantity, 10) : undefined,
-      maxTotalQuantity: maxTotalQuantity ? parseInt(maxTotalQuantity, 10) : undefined,
-    };
+  getFilteredOrders(@Query() filter: RouteFilterDto) {
     return this.routesService.getFilteredOrders(filter);
   }
 

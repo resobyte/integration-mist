@@ -13,7 +13,17 @@ export class DashboardController {
   @Get('stats')
   @Roles(Role.PLATFORM_OWNER, Role.OPERATION)
   async getStats() {
-    const stats = await this.dashboardService.getStats();
+    const stats = await this.dashboardService.getInternalStats();
+    return {
+      success: true,
+      data: stats,
+    };
+  }
+
+  @Get('external-stats')
+  @Roles(Role.PLATFORM_OWNER, Role.OPERATION)
+  async getExternalStats() {
+    const stats = await this.dashboardService.getExternalStats();
     return {
       success: true,
       data: stats,

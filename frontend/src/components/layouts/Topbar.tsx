@@ -10,34 +10,53 @@ interface TopbarProps {
   onMobileMenuOpen: () => void;
 }
 
-interface DashboardStats {
+interface DashboardInternalStats {
   totalStores: number;
   totalProducts: number;
   pendingOrders: number;
   packedOrders: number;
   waitingRoutes: number;
   completedRoutes: number;
+}
+
+interface DashboardExternalStats {
   waitingClaims: number;
   waitingQuestions: number;
 }
 
 export function Topbar({ user, onMobileMenuOpen }: TopbarProps) {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [internalStats, setInternalStats] = useState<DashboardInternalStats | null>(null);
+  const [externalStats, setExternalStats] = useState<DashboardExternalStats | null>(null);
 
   useEffect(() => {
-    const fetchStats = async () => {
+    const fetchInternalStats = async () => {
       try {
-        const response = await apiGet<DashboardStats>('/dashboard/stats');
-        setStats(response.data);
+        const response = await apiGet<DashboardInternalStats>('/dashboard/stats');
+        setInternalStats(response.data);
       } catch (error) {
-        console.error('Failed to fetch dashboard stats:', error);
+        console.error('Failed to fetch dashboard internal stats:', error);
       }
     };
 
-    fetchStats();
-    const interval = setInterval(fetchStats, 30000);
+    const fetchExternalStats = async () => {
+      try {
+        const response = await apiGet<DashboardExternalStats>('/dashboard/external-stats');
+        setExternalStats(response.data);
+      } catch (error) {
+        console.error('Failed to fetch dashboard external stats:', error);
+      }
+    };
 
-    return () => clearInterval(interval);
+    fetchInternalStats();
+    fetchExternalStats();
+    
+    const internalInterval = setInterval(fetchInternalStats, 30000);
+    const externalInterval = setInterval(fetchExternalStats, 60000); // External can be slower
+
+    return () => {
+      clearInterval(internalInterval);
+      clearInterval(externalInterval);
+    };
   }, []);
 
   return (
@@ -62,9 +81,9 @@ export function Topbar({ user, onMobileMenuOpen }: TopbarProps) {
             </svg>
             <span className="hidden lg:inline text-sm font-medium text-muted-foreground group-hover:text-foreground whitespace-nowrap">Paketlenmeyi Bekleyen</span>
             <span className="lg:hidden text-xs font-medium text-muted-foreground group-hover:text-foreground whitespace-nowrap">Bekleyen</span>
-            {stats !== null && (
+            {internalStats !== null && (
               <span className="px-1.5 lg:px-2 py-0.5 rounded-full text-xs font-bold bg-yellow-500/10 text-yellow-600 border border-yellow-500/20 shrink-0">
-                {stats.pendingOrders}
+                {internalStats.pendingOrders}
               </span>
             )}
           </Link>
@@ -78,9 +97,9 @@ export function Topbar({ user, onMobileMenuOpen }: TopbarProps) {
             </svg>
             <span className="hidden lg:inline text-sm font-medium text-muted-foreground group-hover:text-foreground whitespace-nowrap">Toplamada Bekleyen</span>
             <span className="lg:hidden text-xs font-medium text-muted-foreground group-hover:text-foreground whitespace-nowrap">Rota</span>
-            {stats !== null && (
+            {internalStats !== null && (
               <span className="px-1.5 lg:px-2 py-0.5 rounded-full text-xs font-bold bg-orange-500/10 text-orange-600 border border-orange-500/20 shrink-0">
-                {stats.waitingRoutes}
+                {internalStats.waitingRoutes}
               </span>
             )}
           </Link>
@@ -94,9 +113,9 @@ export function Topbar({ user, onMobileMenuOpen }: TopbarProps) {
             </svg>
             <span className="hidden lg:inline text-sm font-medium text-muted-foreground group-hover:text-foreground whitespace-nowrap">İade Bekleyen</span>
             <span className="lg:hidden text-xs font-medium text-muted-foreground group-hover:text-foreground whitespace-nowrap">İade</span>
-            {stats !== null && (
+            {externalStats !== null && (
               <span className="px-1.5 lg:px-2 py-0.5 rounded-full text-xs font-bold bg-red-500/10 text-red-600 border border-red-500/20 shrink-0">
-                {stats.waitingClaims}
+                {externalStats.waitingClaims}
               </span>
             )}
           </Link>
@@ -110,9 +129,9 @@ export function Topbar({ user, onMobileMenuOpen }: TopbarProps) {
             </svg>
             <span className="hidden lg:inline text-sm font-medium text-muted-foreground group-hover:text-foreground whitespace-nowrap">Soru Bekleyen</span>
             <span className="lg:hidden text-xs font-medium text-muted-foreground group-hover:text-foreground whitespace-nowrap">Soru</span>
-            {stats !== null && (
+            {externalStats !== null && (
               <span className="px-1.5 lg:px-2 py-0.5 rounded-full text-xs font-bold bg-blue-500/10 text-blue-600 border border-blue-500/20 shrink-0">
-                {stats.waitingQuestions}
+                {externalStats.waitingQuestions}
               </span>
             )}
           </Link>

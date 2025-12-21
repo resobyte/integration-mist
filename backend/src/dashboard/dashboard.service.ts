@@ -1,6 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { Store } from '../stores/entities/store.entity';
 import { Product } from '../products/entities/product.entity';
 import { Order, OrderStatus } from '../orders/entities/order.entity';
@@ -20,8 +23,9 @@ export interface DashboardStats {
 }
 
 @Injectable()
-export class DashboardService {
+export class DashboardService implements OnModuleInit {
   private readonly logger = new Logger(DashboardService.name);
+  private readonly EXTERNAL_STATS_CACHE_KEY = 'dashboard_external_stats';
 
   constructor(
     @InjectRepository(Store)
@@ -34,9 +38,25 @@ export class DashboardService {
     private readonly routeRepository: Repository<Route>,
     private readonly trendyolClaimsApiService: TrendyolClaimsApiService,
     private readonly trendyolQuestionsApiService: TrendyolQuestionsApiService,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
+  async onModuleInit() {
+    // Initial refresh on startup
+    this.refreshExternalStats();
+  }
+
   async getStats(): Promise<DashboardStats> {
+    const internalStats = await this.getInternalStats();
+    const externalStats = await this.getExternalStats();
+
+    return {
+      ...internalStats,
+      ...externalStats,
+    };
+  }
+
+  async getInternalStats() {
     const [
       totalStores,
       totalProducts,
@@ -55,49 +75,6 @@ export class DashboardService {
       this.routeRepository.count({ where: { status: RouteStatus.COMPLETED } }),
     ]);
 
-    const stores = await this.storeRepository.find({
-      where: { isActive: true },
-    });
-
-    const activeStores = stores.filter(
-      (store) => store.sellerId && store.apiKey && store.apiSecret,
-    );
-
-    let waitingClaims = 0;
-    let waitingQuestions = 0;
-
-    for (const store of activeStores) {
-      try {
-        const claims = await this.trendyolClaimsApiService.getAllClaims(
-          store.sellerId!,
-          store.apiKey!,
-          store.apiSecret!,
-        );
-        waitingClaims += claims.filter((claim) => {
-          if (!claim.items || !Array.isArray(claim.items) || claim.items.length === 0) {
-            return false;
-          }
-          const firstItem = claim.items[0] as { claimItems?: { claimItemStatus?: { name?: string } }[] };
-          const statusName = firstItem?.claimItems?.[0]?.claimItemStatus?.name;
-          return statusName === 'WaitingInAction';
-        }).length;
-      } catch (error) {
-        this.logger.error(`Error fetching claims for store ${store.name}:`, error);
-      }
-
-      try {
-        const questions = await this.trendyolQuestionsApiService.getAllQuestions(
-          store.sellerId!,
-          store.apiKey!,
-          store.apiSecret!,
-          'WAITING_FOR_ANSWER',
-        );
-        waitingQuestions += questions.length;
-      } catch (error) {
-        this.logger.error(`Error fetching questions for store ${store.name}:`, error);
-      }
-    }
-
     return {
       totalStores,
       totalProducts,
@@ -105,9 +82,78 @@ export class DashboardService {
       packedOrders,
       waitingRoutes,
       completedRoutes,
-      waitingClaims,
-      waitingQuestions,
     };
+  }
+
+  async getExternalStats(): Promise<{ waitingClaims: number; waitingQuestions: number }> {
+    const cached = await this.cacheManager.get<{ waitingClaims: number; waitingQuestions: number }>(
+      this.EXTERNAL_STATS_CACHE_KEY,
+    );
+
+    if (cached) {
+      return cached;
+    }
+
+    // If not in cache, trigger background update and return current zeros or a fallback
+    // For the first time, we might have to wait or just return 0 and let cron fill it
+    this.refreshExternalStats(); 
+    
+    return {
+      waitingClaims: 0,
+      waitingQuestions: 0,
+    };
+  }
+
+  @Cron(CronExpression.EVERY_10_MINUTES)
+  async refreshExternalStats() {
+    this.logger.log('Refreshing dashboard external stats...');
+    
+    try {
+      const stores = await this.storeRepository.find({
+        where: { isActive: true },
+      });
+
+      const activeStores = stores.filter(
+        (store) => store.sellerId && store.apiKey && store.apiSecret,
+      );
+
+      let waitingClaims = 0;
+      let waitingQuestions = 0;
+
+      for (const store of activeStores) {
+        try {
+          const claims = await this.trendyolClaimsApiService.getAllClaims(
+            store.sellerId!,
+            store.apiKey!,
+            store.apiSecret!,
+          );
+          // Count all claims returned by default (Created) + any other pending statuses if we want
+          // Since getAllClaims defaults to 'Created', we count those.
+          waitingClaims += claims.length;
+        } catch (error) {
+          this.logger.error(`Error fetching claims for store ${store.name}:`, error);
+        }
+
+        try {
+          const questions = await this.trendyolQuestionsApiService.getAllQuestions(
+            store.sellerId!,
+            store.apiKey!,
+            store.apiSecret!,
+            'WAITING_FOR_ANSWER',
+          );
+          waitingQuestions += questions.length;
+        } catch (error) {
+          this.logger.error(`Error fetching questions for store ${store.name}:`, error);
+        }
+      }
+
+      const stats = { waitingClaims, waitingQuestions };
+      await this.cacheManager.set(this.EXTERNAL_STATS_CACHE_KEY, stats, 1200000); // 20 min cache
+      this.logger.log('Dashboard external stats refreshed.');
+      return stats;
+    } catch (error) {
+      this.logger.error('Failed to refresh dashboard external stats:', error);
+    }
   }
 }
 

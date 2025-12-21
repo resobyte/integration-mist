@@ -1,6 +1,7 @@
 import {
   Injectable,
   NotFoundException,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -20,6 +21,8 @@ export interface SkippedOrder {
 
 @Injectable()
 export class OrdersService {
+  private readonly logger = new Logger(OrdersService.name);
+
   constructor(
     @InjectRepository(Order)
     private readonly orderRepository: Repository<Order>,
@@ -45,6 +48,8 @@ export class OrdersService {
       throw new NotFoundException('Store API Key or API Secret not found');
     }
 
+    this.logger.log(`Starting order sync for store: ${store.name} (${store.id})${store.proxyUrl ? ' using proxy' : ''}`);
+
     const params = {
       size: 200,
       orderByField: 'PackageLastModifiedDate',
@@ -67,6 +72,7 @@ export class OrdersService {
           store.apiKey,
           store.apiSecret,
           { ...params, page },
+          store.proxyUrl || undefined,
         );
 
         totalPages = response.totalPages;

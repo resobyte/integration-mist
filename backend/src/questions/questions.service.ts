@@ -37,6 +37,7 @@ export class QuestionsService {
           store.apiKey!,
           store.apiSecret!,
           'WAITING_FOR_ANSWER',
+          store.proxyUrl || undefined,
         );
 
         for (const trendyolQuestion of trendyolQuestions) {
@@ -104,6 +105,7 @@ export class QuestionsService {
           store.apiKey!,
           store.apiSecret!,
           questionId,
+          store.proxyUrl || undefined,
         );
 
         if (trendyolQuestion) {
@@ -142,6 +144,7 @@ export class QuestionsService {
       store.apiSecret,
       questionId,
       text,
+      store.proxyUrl || undefined,
     );
 
     return {

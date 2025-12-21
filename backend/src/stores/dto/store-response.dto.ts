@@ -14,6 +14,7 @@ export class StoreResponseDto {
   senderCity: string | null;
   senderDistrict: string | null;
   senderPhone: string | null;
+  proxyUrl: string | null;
   createdAt: Date;
   updatedAt: Date;
 
@@ -32,6 +33,7 @@ export class StoreResponseDto {
     dto.senderCity = entity.senderCity;
     dto.senderDistrict = entity.senderDistrict;
     dto.senderPhone = entity.senderPhone;
+    dto.proxyUrl = entity.proxyUrl;
     dto.createdAt = entity.createdAt;
     dto.updatedAt = entity.updatedAt;
     return dto;

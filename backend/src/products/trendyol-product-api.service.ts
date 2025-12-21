@@ -1,6 +1,7 @@
 import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
+import { HttpsProxyAgent } from 'https-proxy-agent';
 
 export interface TrendyolProduct {
   id: string;
@@ -68,6 +69,7 @@ export class TrendyolProductApiService {
       onSale?: boolean;
       archived?: boolean;
     },
+    proxyUrl?: string,
   ): Promise<TrendyolProductResponse> {
     try {
       const baseUrl = this.configService.get<string>('TRENDYOL_PRODUCT_API_URL') ||
@@ -94,9 +96,9 @@ export class TrendyolProductApiService {
       const base64Token = Buffer.from(tokenString, 'utf8').toString('base64');
       const authToken = `Basic ${base64Token}`;
 
-      this.logger.log(`Fetching products from Trendyol for sellerId: ${sellerId}, page: ${params?.page || 0}`);
+      this.logger.log(`Fetching products from Trendyol for sellerId: ${sellerId}, page: ${params?.page || 0}${proxyUrl ? ' via proxy' : ''}`);
 
-      const response = await this.axiosInstance.get<TrendyolProductResponse>(fullUrl, {
+      const axiosConfig: any = {
         headers: {
           'Authorization': authToken,
           'Content-Type': 'application/json',
@@ -105,7 +107,14 @@ export class TrendyolProductApiService {
         },
         maxRedirects: 0,
         maxBodyLength: Infinity,
-      });
+      };
+
+      if (proxyUrl) {
+        axiosConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
+        axiosConfig.proxy = false;
+      }
+
+      const response = await this.axiosInstance.get<TrendyolProductResponse>(fullUrl, axiosConfig);
 
       this.logger.log(`Successfully fetched ${response.data.content.length} products from Trendyol (page ${response.data.page}/${response.data.totalPages})`);
 
@@ -139,6 +148,7 @@ export class TrendyolProductApiService {
     sellerId: string,
     apiKey: string,
     apiSecret: string,
+    proxyUrl?: string,
   ): Promise<TrendyolProduct[]> {
     const allProducts: TrendyolProduct[] = [];
     let page = 0;
@@ -150,7 +160,7 @@ export class TrendyolProductApiService {
         page,
         size: 100,
         onSale: true,
-      });
+      }, proxyUrl);
 
       allProducts.push(...response.content);
       totalPages = response.totalPages;

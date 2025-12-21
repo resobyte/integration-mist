@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import axios, { AxiosInstance } from 'axios';
+import { HttpsProxyAgent } from 'https-proxy-agent';
 
 interface TrendyolClaimItem {
   orderLine: {
@@ -83,10 +85,14 @@ interface GetClaimsParams {
 export class TrendyolClaimsApiService {
   private readonly logger = new Logger(TrendyolClaimsApiService.name);
   private readonly baseUrl: string;
+  private readonly axiosInstance: AxiosInstance;
 
   constructor(private readonly configService: ConfigService) {
     this.baseUrl = this.configService.get<string>('TRENDYOL_ORDER_API_URL') || 
                    'https://apigw.trendyol.com/integration/order/sellers';
+    this.axiosInstance = axios.create({
+      timeout: 30000,
+    });
   }
 
   private getAuthHeader(apiKey: string, apiSecret: string): string {
@@ -98,32 +104,35 @@ export class TrendyolClaimsApiService {
     apiKey: string,
     apiSecret: string,
     params?: GetClaimsParams,
+    proxyUrl?: string,
   ): Promise<TrendyolClaimsResponse> {
-    const url = new URL(`${this.baseUrl}/${sellerId}/claims`);
+    const url = `${this.baseUrl}/${sellerId}/claims`;
 
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined) {
-          url.searchParams.append(key, String(value));
-        }
-      });
-    }
-
-    const response = await fetch(url.toString(), {
-      method: 'GET',
+    const axiosConfig: any = {
       headers: {
         Authorization: this.getAuthHeader(apiKey, apiSecret),
         'Content-Type': 'application/json',
       },
-    });
+      params: params,
+    };
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      this.logger.error(`Trendyol Claims API error: ${errorText}`);
-      throw new Error(`Trendyol API error: ${response.status}`);
+    if (proxyUrl) {
+      axiosConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
+      axiosConfig.proxy = false;
     }
 
-    return response.json();
+    this.logger.log(`Fetching claims from Trendyol for sellerId: ${sellerId}${proxyUrl ? ' via proxy' : ''}`);
+
+    try {
+      const response = await this.axiosInstance.get<TrendyolClaimsResponse>(url, axiosConfig);
+      return response.data;
+    } catch (error) {
+      this.logger.error(`Trendyol Claims API error: ${error.message}`);
+      if (axios.isAxiosError(error) && error.response) {
+        throw new Error(`Trendyol API error: ${error.response.status}`);
+      }
+      throw error;
+    }
   }
 
   async getAllClaims(
@@ -131,6 +140,7 @@ export class TrendyolClaimsApiService {
     apiKey: string,
     apiSecret: string,
     status?: string,
+    proxyUrl?: string,
   ): Promise<TrendyolClaim[]> {
     const allClaims: TrendyolClaim[] = [];
     let page = 0;
@@ -143,7 +153,7 @@ export class TrendyolClaimsApiService {
         claimItemStatus: status || 'Created',
       };
 
-      const response = await this.getClaims(sellerId, apiKey, apiSecret, params);
+      const response = await this.getClaims(sellerId, apiKey, apiSecret, params, proxyUrl);
 
       if (response.content && response.content.length > 0) {
         allClaims.push(...response.content);
@@ -163,28 +173,39 @@ export class TrendyolClaimsApiService {
     apiSecret: string,
     claimId: string,
     claimLineItemIdList: string[],
+    proxyUrl?: string,
   ): Promise<boolean> {
     const url = `${this.baseUrl}/${sellerId}/claims/${claimId}/items/approve`;
 
-    const response = await fetch(url, {
-      method: 'PUT',
+    const axiosConfig: any = {
       headers: {
         Authorization: this.getAuthHeader(apiKey, apiSecret),
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        claimLineItemIdList,
-        params: {},
-      }),
-    });
+    };
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      this.logger.error(`Trendyol Approve Claim error: ${errorText}`);
-      throw new Error(`Trendyol API error: ${response.status} - ${errorText}`);
+    if (proxyUrl) {
+      axiosConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
+      axiosConfig.proxy = false;
     }
 
-    return true;
+    try {
+      await this.axiosInstance.put(
+        url,
+        {
+          claimLineItemIdList,
+          params: {},
+        },
+        axiosConfig,
+      );
+      return true;
+    } catch (error) {
+      this.logger.error(`Trendyol Approve Claim error: ${error.message}`);
+      if (axios.isAxiosError(error) && error.response) {
+        throw new Error(`Trendyol API error: ${error.response.status} - ${JSON.stringify(error.response.data)}`);
+      }
+      throw error;
+    }
   }
 }
 

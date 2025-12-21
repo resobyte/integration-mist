@@ -40,5 +40,8 @@ export class Store extends BaseEntity {
 
   @Column({ type: 'varchar', length: 20, nullable: true })
   senderPhone: string | null;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  proxyUrl: string | null;
 }
 

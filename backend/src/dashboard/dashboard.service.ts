@@ -126,6 +126,8 @@ export class DashboardService implements OnModuleInit {
             store.sellerId!,
             store.apiKey!,
             store.apiSecret!,
+            undefined,
+            store.proxyUrl || undefined,
           );
           // Count all claims returned by default (Created) + any other pending statuses if we want
           // Since getAllClaims defaults to 'Created', we count those.
@@ -140,6 +142,7 @@ export class DashboardService implements OnModuleInit {
             store.apiKey!,
             store.apiSecret!,
             'WAITING_FOR_ANSWER',
+            store.proxyUrl || undefined,
           );
           waitingQuestions += questions.length;
         } catch (error) {

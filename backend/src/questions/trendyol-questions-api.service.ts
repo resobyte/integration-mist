@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import axios, { AxiosInstance } from 'axios';
+import { HttpsProxyAgent } from 'https-proxy-agent';
 
 interface TrendyolQuestionAnswer {
   creationDate: number;
@@ -55,10 +57,14 @@ interface GetQuestionsParams {
 export class TrendyolQuestionsApiService {
   private readonly logger = new Logger(TrendyolQuestionsApiService.name);
   private readonly baseUrl: string;
+  private readonly axiosInstance: AxiosInstance;
 
   constructor(private readonly configService: ConfigService) {
     this.baseUrl = this.configService.get<string>('TRENDYOL_QNA_API_URL') || 
                    'https://apigw.trendyol.com/integration/qna/sellers';
+    this.axiosInstance = axios.create({
+      timeout: 30000,
+    });
   }
 
   private getAuthHeader(apiKey: string, apiSecret: string): string {
@@ -70,32 +76,35 @@ export class TrendyolQuestionsApiService {
     apiKey: string,
     apiSecret: string,
     params?: GetQuestionsParams,
+    proxyUrl?: string,
   ): Promise<TrendyolQuestionsResponse> {
-    const url = new URL(`${this.baseUrl}/${sellerId}/questions/filter`);
+    const url = `${this.baseUrl}/${sellerId}/questions/filter`;
 
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined) {
-          url.searchParams.append(key, String(value));
-        }
-      });
-    }
-
-    const response = await fetch(url.toString(), {
-      method: 'GET',
+    const axiosConfig: any = {
       headers: {
         Authorization: this.getAuthHeader(apiKey, apiSecret),
         'Content-Type': 'application/json',
       },
-    });
+      params: params,
+    };
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      this.logger.error(`Trendyol Questions API error: ${errorText}`);
-      throw new Error(`Trendyol API error: ${response.status} - ${errorText}`);
+    if (proxyUrl) {
+      axiosConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
+      axiosConfig.proxy = false;
     }
 
-    return response.json();
+    this.logger.log(`Fetching questions from Trendyol for sellerId: ${sellerId}${proxyUrl ? ' via proxy' : ''}`);
+
+    try {
+      const response = await this.axiosInstance.get<TrendyolQuestionsResponse>(url, axiosConfig);
+      return response.data;
+    } catch (error) {
+      this.logger.error(`Trendyol Questions API error: ${error.message}`);
+      if (axios.isAxiosError(error) && error.response) {
+        throw new Error(`Trendyol API error: ${error.response.status} - ${JSON.stringify(error.response.data)}`);
+      }
+      throw error;
+    }
   }
 
   async getAllQuestions(
@@ -103,6 +112,7 @@ export class TrendyolQuestionsApiService {
     apiKey: string,
     apiSecret: string,
     status: string = 'WAITING_FOR_ANSWER',
+    proxyUrl?: string,
   ): Promise<TrendyolQuestion[]> {
     const allQuestions: TrendyolQuestion[] = [];
     let page = 0;
@@ -122,7 +132,7 @@ export class TrendyolQuestionsApiService {
         orderByDirection: 'DESC',
       };
 
-      const response = await this.getQuestions(sellerId, apiKey, apiSecret, params);
+      const response = await this.getQuestions(sellerId, apiKey, apiSecret, params, proxyUrl);
 
       if (response.content && response.content.length > 0) {
         allQuestions.push(...response.content);
@@ -141,24 +151,32 @@ export class TrendyolQuestionsApiService {
     apiKey: string,
     apiSecret: string,
     questionId: number,
+    proxyUrl?: string,
   ): Promise<TrendyolQuestion> {
     const url = `${this.baseUrl}/${sellerId}/questions/${questionId}`;
 
-    const response = await fetch(url.toString(), {
-      method: 'GET',
+    const axiosConfig: any = {
       headers: {
         Authorization: this.getAuthHeader(apiKey, apiSecret),
         'Content-Type': 'application/json',
       },
-    });
+    };
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      this.logger.error(`Trendyol Get Question error: ${errorText}`);
-      throw new Error(`Trendyol API error: ${response.status} - ${errorText}`);
+    if (proxyUrl) {
+      axiosConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
+      axiosConfig.proxy = false;
     }
 
-    return response.json();
+    try {
+      const response = await this.axiosInstance.get<TrendyolQuestion>(url, axiosConfig);
+      return response.data;
+    } catch (error) {
+      this.logger.error(`Trendyol Get Question error: ${error.message}`);
+      if (axios.isAxiosError(error) && error.response) {
+        throw new Error(`Trendyol API error: ${error.response.status} - ${JSON.stringify(error.response.data)}`);
+      }
+      throw error;
+    }
   }
 
   async createAnswer(
@@ -167,6 +185,7 @@ export class TrendyolQuestionsApiService {
     apiSecret: string,
     questionId: number,
     text: string,
+    proxyUrl?: string,
   ): Promise<boolean> {
     const url = `${this.baseUrl}/${sellerId}/questions/${questionId}/answers`;
 
@@ -174,22 +193,28 @@ export class TrendyolQuestionsApiService {
       throw new Error('Answer text must be between 10 and 2000 characters');
     }
 
-    const response = await fetch(url.toString(), {
-      method: 'POST',
+    const axiosConfig: any = {
       headers: {
         Authorization: this.getAuthHeader(apiKey, apiSecret),
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ text }),
-    });
+    };
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      this.logger.error(`Trendyol Create Answer error: ${errorText}`);
-      throw new Error(`Trendyol API error: ${response.status} - ${errorText}`);
+    if (proxyUrl) {
+      axiosConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
+      axiosConfig.proxy = false;
     }
 
-    return true;
+    try {
+      await this.axiosInstance.post(url, { text }, axiosConfig);
+      return true;
+    } catch (error) {
+      this.logger.error(`Trendyol Create Answer error: ${error.message}`);
+      if (axios.isAxiosError(error) && error.response) {
+        throw new Error(`Trendyol API error: ${error.response.status} - ${JSON.stringify(error.response.data)}`);
+      }
+      throw error;
+    }
   }
 }
 

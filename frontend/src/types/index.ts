@@ -36,6 +36,7 @@ export interface Store {
   senderCity: string | null;
   senderDistrict: string | null;
   senderPhone: string | null;
+  proxyUrl: string | null;
   createdAt: string;
   updatedAt: string;
 }

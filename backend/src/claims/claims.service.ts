@@ -37,6 +37,8 @@ export class ClaimsService {
           store.sellerId!,
           store.apiKey!,
           store.apiSecret!,
+          undefined,
+          store.proxyUrl || undefined,
         );
 
         for (const trendyolClaim of trendyolClaims) {
@@ -122,6 +124,8 @@ export class ClaimsService {
       store.sellerId,
       store.apiKey,
       store.apiSecret,
+      undefined,
+      store.proxyUrl || undefined,
     );
 
     const trendyolClaim = trendyolClaims.find((c) => c.claimId === claimId);
@@ -182,6 +186,7 @@ export class ClaimsService {
       store.apiSecret,
       claimId,
       claimLineItemIds,
+      store.proxyUrl || undefined,
     );
 
     return {

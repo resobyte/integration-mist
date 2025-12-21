@@ -19,6 +19,7 @@ interface StoreFormData {
   senderCity: string;
   senderDistrict: string;
   senderPhone: string;
+  proxyUrl: string;
 }
 
 const initialFormData: StoreFormData = {
@@ -33,6 +34,7 @@ const initialFormData: StoreFormData = {
   senderCity: '',
   senderDistrict: '',
   senderPhone: '',
+  proxyUrl: '',
 };
 
 export function StoresTable() {
@@ -116,6 +118,7 @@ export function StoresTable() {
       senderCity: store.senderCity || '',
       senderDistrict: store.senderDistrict || '',
       senderPhone: store.senderPhone || '',
+      proxyUrl: store.proxyUrl || '',
     });
     setFormError('');
     setIsModalOpen(true);
@@ -147,6 +150,7 @@ export function StoresTable() {
       if (!payload.senderCity) delete payload.senderCity;
       if (!payload.senderDistrict) delete payload.senderDistrict;
       if (!payload.senderPhone) delete payload.senderPhone;
+      if (!payload.proxyUrl) delete payload.proxyUrl;
 
       if (editingStore) {
         await apiPatch(`/stores/${editingStore.id}`, payload);
@@ -451,6 +455,17 @@ export function StoresTable() {
                   className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-muted/20"
                   rows={3}
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Proxy URL</label>
+                <input
+                  type="text"
+                  value={formData.proxyUrl}
+                  onChange={(e) => setFormData({ ...formData, proxyUrl: e.target.value })}
+                  className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-muted/20"
+                  placeholder="http://user:pass@ip:port"
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">Örn: http://username:password@1.2.3.4:8080</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">Durum</label>

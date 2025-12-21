@@ -63,5 +63,10 @@ export class CreateStoreDto {
   @IsOptional()
   @MaxLength(20)
   senderPhone?: string;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(500)
+  proxyUrl?: string;
 }
 

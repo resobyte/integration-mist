@@ -252,6 +252,7 @@ export class ProductsService {
         store.sellerId,
         store.apiKey,
         store.apiSecret,
+        store.proxyUrl || undefined,
       );
 
       this.logger.log(`Syncing ${trendyolProducts.length} products for store: ${store.name}`);

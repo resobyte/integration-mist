@@ -72,8 +72,6 @@ export class AuthService {
 
     await this.usersService.updateRefreshToken(user.id, tokens.refreshToken);
 
-    this.logger.log(`User logged in: ${user.email}`);
-
     return {
       user: {
         id: user.id,
@@ -117,8 +115,6 @@ export class AuthService {
 
     await this.usersService.updateRefreshToken(user.id, tokens.refreshToken);
 
-    this.logger.log(`Tokens refreshed for user: ${user.email}`);
-
     return { tokens };
   }
 
@@ -135,8 +131,6 @@ export class AuthService {
         expiresAt,
       });
     }
-
-    this.logger.log(`User logged out: ${userId}`);
   }
 
   async getProfile(userId: string): Promise<AuthResponseDto['user']> {

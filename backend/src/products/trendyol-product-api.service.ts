@@ -47,13 +47,8 @@ interface TrendyolProductResponse {
 @Injectable()
 export class TrendyolProductApiService {
   private readonly logger = new Logger(TrendyolProductApiService.name);
-  private readonly axiosInstance: AxiosInstance;
 
-  constructor(private readonly configService: ConfigService) {
-    this.axiosInstance = axios.create({
-      timeout: 30000,
-    });
-  }
+  constructor(private readonly configService: ConfigService) {}
 
   async getProducts(
     sellerId: string,
@@ -96,8 +91,6 @@ export class TrendyolProductApiService {
       const base64Token = Buffer.from(tokenString, 'utf8').toString('base64');
       const authToken = `Basic ${base64Token}`;
 
-      this.logger.log(`Fetching products from Trendyol for sellerId: ${sellerId}, page: ${params?.page || 0}${proxyUrl ? ' via proxy' : ''}`);
-
       const axiosConfig: any = {
         headers: {
           'Authorization': authToken,
@@ -107,16 +100,19 @@ export class TrendyolProductApiService {
         },
         maxRedirects: 0,
         maxBodyLength: Infinity,
+        timeout: 30000,
       };
 
       if (proxyUrl) {
-        axiosConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
-        axiosConfig.proxy = false;
+        try {
+          axiosConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
+          axiosConfig.proxy = false;
+        } catch (proxyError) {
+          this.logger.error(`Invalid proxy URL for ${sellerId}: ${proxyUrl}`);
+        }
       }
 
-      const response = await this.axiosInstance.get<TrendyolProductResponse>(fullUrl, axiosConfig);
-
-      this.logger.log(`Successfully fetched ${response.data.content.length} products from Trendyol (page ${response.data.page}/${response.data.totalPages})`);
+      const response = await axios.get<TrendyolProductResponse>(fullUrl, axiosConfig);
 
       return response.data;
     } catch (error) {
@@ -171,7 +167,6 @@ export class TrendyolProductApiService {
       }
     }
 
-    this.logger.log(`Fetched total ${allProducts.length} approved products from Trendyol`);
     return allProducts;
   }
 }

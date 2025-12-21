@@ -57,14 +57,10 @@ interface GetQuestionsParams {
 export class TrendyolQuestionsApiService {
   private readonly logger = new Logger(TrendyolQuestionsApiService.name);
   private readonly baseUrl: string;
-  private readonly axiosInstance: AxiosInstance;
 
   constructor(private readonly configService: ConfigService) {
     this.baseUrl = this.configService.get<string>('TRENDYOL_QNA_API_URL') || 
                    'https://apigw.trendyol.com/integration/qna/sellers';
-    this.axiosInstance = axios.create({
-      timeout: 30000,
-    });
   }
 
   private getAuthHeader(apiKey: string, apiSecret: string): string {
@@ -86,17 +82,20 @@ export class TrendyolQuestionsApiService {
         'Content-Type': 'application/json',
       },
       params: params,
+      timeout: 30000,
     };
 
     if (proxyUrl) {
-      axiosConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
-      axiosConfig.proxy = false;
+      try {
+        axiosConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
+        axiosConfig.proxy = false;
+      } catch (proxyError) {
+        this.logger.error(`Invalid proxy URL for ${sellerId}: ${proxyUrl}`);
+      }
     }
 
-    this.logger.log(`Fetching questions from Trendyol for sellerId: ${sellerId}${proxyUrl ? ' via proxy' : ''}`);
-
     try {
-      const response = await this.axiosInstance.get<TrendyolQuestionsResponse>(url, axiosConfig);
+      const response = await axios.get<TrendyolQuestionsResponse>(url, axiosConfig);
       return response.data;
     } catch (error) {
       this.logger.error(`Trendyol Questions API error: ${error.message}`);
@@ -160,15 +159,20 @@ export class TrendyolQuestionsApiService {
         Authorization: this.getAuthHeader(apiKey, apiSecret),
         'Content-Type': 'application/json',
       },
+      timeout: 30000,
     };
 
     if (proxyUrl) {
-      axiosConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
-      axiosConfig.proxy = false;
+      try {
+        axiosConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
+        axiosConfig.proxy = false;
+      } catch (proxyError) {
+        this.logger.error(`Invalid proxy URL for ${sellerId}: ${proxyUrl}`);
+      }
     }
 
     try {
-      const response = await this.axiosInstance.get<TrendyolQuestion>(url, axiosConfig);
+      const response = await axios.get<TrendyolQuestion>(url, axiosConfig);
       return response.data;
     } catch (error) {
       this.logger.error(`Trendyol Get Question error: ${error.message}`);
@@ -198,15 +202,20 @@ export class TrendyolQuestionsApiService {
         Authorization: this.getAuthHeader(apiKey, apiSecret),
         'Content-Type': 'application/json',
       },
+      timeout: 30000,
     };
 
     if (proxyUrl) {
-      axiosConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
-      axiosConfig.proxy = false;
+      try {
+        axiosConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
+        axiosConfig.proxy = false;
+      } catch (proxyError) {
+        this.logger.error(`Invalid proxy URL for ${sellerId}: ${proxyUrl}`);
+      }
     }
 
     try {
-      await this.axiosInstance.post(url, { text }, axiosConfig);
+      await axios.post(url, { text }, axiosConfig);
       return true;
     } catch (error) {
       this.logger.error(`Trendyol Create Answer error: ${error.message}`);

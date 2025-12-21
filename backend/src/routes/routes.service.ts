@@ -289,12 +289,7 @@ export class RoutesService {
                 order.shipmentPackageId,
                 packageLines,
               );
-              this.logger.log(`Updated Trendyol package status to Picking for order ${order.orderNumber}`);
-            } else {
-              this.logger.warn(`No valid line IDs found for order ${order.orderNumber}, skipping Trendyol update`);
             }
-          } else {
-            this.logger.warn(`No lines found for order ${order.orderNumber}, skipping Trendyol update`);
           }
         } catch (error) {
           this.logger.error(`Failed to update Trendyol package status for order ${order.orderNumber}: ${error.message}`, error.stack);

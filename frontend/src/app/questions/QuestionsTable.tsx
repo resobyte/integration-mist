@@ -127,13 +127,13 @@ export function QuestionsTable() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-3xl font-bold text-foreground font-rubik">Müşteri Soruları</h2>
-          <p className="text-muted-foreground mt-1">Trendyol müşteri sorularını görüntüleyin ve cevaplayın.</p>
+          <h2 className="text-2xl md:text-3xl font-bold text-foreground font-rubik">Müşteri Soruları</h2>
+          <p className="text-muted-foreground mt-1 text-sm md:text-base">Trendyol müşteri sorularını görüntüleyin ve cevaplayın.</p>
         </div>
         <button
           onClick={fetchQuestions}
           disabled={isLoading}
-          className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg flex items-center shadow-md transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full sm:w-auto bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg flex items-center justify-center shadow-md transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isLoading ? (
             <>
@@ -152,11 +152,11 @@ export function QuestionsTable() {
       </div>
 
       <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-border flex items-center justify-between">
-          <div className="text-sm text-muted-foreground">
+        <div className="p-4 border-b border-border flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="text-sm text-muted-foreground font-medium">
             {pagination && `${pagination.total} soru bulundu`}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-full md:w-auto justify-between md:justify-end">
             <span className="text-sm text-muted-foreground">Sayfa başına:</span>
             <select
               value={pageSize}
@@ -164,7 +164,7 @@ export function QuestionsTable() {
                 setPageSize(Number(e.target.value));
                 setCurrentPage(1);
               }}
-              className="px-2 py-1 text-sm border border-input rounded-md bg-background"
+              className="px-2 py-1 text-sm border border-input rounded-md bg-background outline-none focus:ring-2 focus:ring-primary/20 transition-all"
             >
               <option value={10}>10</option>
               <option value={25}>25</option>
@@ -174,7 +174,8 @@ export function QuestionsTable() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* DESKTOP TABLE VIEW */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-muted/30 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -221,12 +222,12 @@ export function QuestionsTable() {
                           <img
                             src={question.productImageUrl}
                             alt={question.productName}
-                            className="w-12 h-12 object-cover rounded border border-border"
+                            className="w-12 h-12 object-contain bg-white rounded border border-border"
                           />
                         )}
                         <div>
-                          <div className="text-sm font-medium text-foreground">{question.productName}</div>
-                          <div className="text-xs text-muted-foreground">{question.storeName}</div>
+                          <div className="text-sm font-medium text-foreground line-clamp-1 max-w-[200px]" title={question.productName}>{question.productName}</div>
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mt-0.5 bg-muted px-1.5 py-0.5 rounded inline-block">{question.storeName}</div>
                         </div>
                       </div>
                     </td>
@@ -251,7 +252,7 @@ export function QuestionsTable() {
                             setSelectedQuestion(question);
                             setAnswerText('');
                           }}
-                          className="text-primary hover:text-primary-dark text-sm font-medium flex items-center group"
+                          className="flex items-center px-3 py-1.5 text-xs font-bold text-primary bg-white hover:bg-primary/5 border border-primary/30 rounded-lg transition-colors group"
                         >
                           <svg className="w-4 h-4 mr-1.5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -265,7 +266,7 @@ export function QuestionsTable() {
                               setSelectedQuestion(question);
                               setAnswerText('');
                             }}
-                            className="text-success hover:text-success-dark text-sm font-medium flex items-center group"
+                            className="flex items-center px-3 py-1.5 text-xs font-bold text-success bg-white hover:bg-success/5 border border-success/30 rounded-lg transition-colors group"
                           >
                             <svg className="w-4 h-4 mr-1.5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -288,41 +289,104 @@ export function QuestionsTable() {
           </table>
         </div>
 
+        {/* MOBILE CARD VIEW */}
+        <div className="md:hidden divide-y divide-border">
+          {isLoading ? (
+            <div className="p-8 text-center flex justify-center">
+              <div className="h-6 w-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : questions.length > 0 ? (
+            questions.map((question) => (
+              <div key={question.id} className="p-4 space-y-4 hover:bg-muted/10 transition-colors">
+                <div className="flex justify-between items-start">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider bg-primary/10 text-primary px-2 py-1 rounded">
+                      {question.storeName}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase ${getStatusBadgeColor(question.status)}`}>
+                      {getStatusLabel(question.status)}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground">
+                    {formatDate(question.creationDate)}
+                  </span>
+                </div>
+
+                <div className="flex gap-3">
+                  {question.productImageUrl && (
+                    <img
+                      src={question.productImageUrl}
+                      alt={question.productName}
+                      className="w-16 h-16 object-contain bg-white rounded-lg border border-border flex-shrink-0"
+                    />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-sm font-bold text-foreground line-clamp-1">{question.productName}</h4>
+                    <p className="text-xs text-muted-foreground mt-1 line-clamp-3 italic">
+                      "{question.questionText}"
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-[10px] text-muted-foreground border-t border-border/50 pt-3">
+                  <span className="font-medium">Müşteri: {question.customerName}</span>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setSelectedQuestion(question);
+                      setAnswerText('');
+                    }}
+                    className="flex-1 flex justify-center items-center py-2.5 px-3 text-xs font-bold text-primary bg-white hover:bg-primary/5 border border-primary/30 rounded-lg transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    Detay
+                  </button>
+                  {question.status === 'WAITING_FOR_ANSWER' && (
+                    <button
+                      onClick={() => {
+                        setSelectedQuestion(question);
+                        setAnswerText('');
+                      }}
+                      className="flex-1 flex justify-center items-center py-2.5 px-3 text-xs font-bold text-success bg-white hover:bg-success/5 border border-success/30 rounded-lg transition-colors"
+                    >
+                      <svg className="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                      Cevapla
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="p-10 text-center text-muted-foreground text-sm">
+              Henüz soru bulunmuyor.
+            </div>
+          )}
+        </div>
+
         {pagination && (
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t border-border bg-muted/10">
-            <div className="flex items-center gap-4">
-              <div className="text-sm text-muted-foreground">
-                Sayfa {pagination.page} / {pagination.totalPages || 1} ({pagination.total} kayıt)
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">Sayfa başına:</span>
-                <select
-                  value={pageSize}
-                  onChange={(e) => {
-                    setPageSize(Number(e.target.value));
-                    setCurrentPage(1);
-                  }}
-                  className="px-2 py-1 text-sm border border-input rounded-md bg-background"
-                >
-                  <option value={10}>10</option>
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
-              </div>
+            <div className="text-sm text-muted-foreground order-2 sm:order-1">
+              Sayfa {pagination.page} / {pagination.totalPages || 1} ({pagination.total} kayıt)
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 order-1 sm:order-2 w-full sm:w-auto">
               <button
                 onClick={() => setCurrentPage(p => p - 1)}
                 disabled={pagination.page <= 1}
-                className="px-4 py-2 text-sm font-medium border border-input rounded-lg hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="flex-1 sm:flex-none px-4 py-2 text-sm font-medium border border-input rounded-lg hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors bg-background"
               >
                 Önceki
               </button>
               <button
                 onClick={() => setCurrentPage(p => p + 1)}
                 disabled={pagination.page >= pagination.totalPages}
-                className="px-4 py-2 text-sm font-medium border border-input rounded-lg hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="flex-1 sm:flex-none px-4 py-2 text-sm font-medium border border-input rounded-lg hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors bg-background"
               >
                 Sonraki
               </button>
@@ -390,7 +454,7 @@ export function QuestionsTable() {
                     <img
                       src={selectedQuestion.productImageUrl}
                       alt={selectedQuestion.productName}
-                      className="w-16 h-16 object-cover rounded border border-border"
+                      className="w-16 h-16 object-contain rounded border border-border"
                     />
                   )}
                   <div>

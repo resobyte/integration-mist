@@ -48,8 +48,6 @@ export class OrdersService {
       throw new NotFoundException('Store API Key or API Secret not found');
     }
 
-    this.logger.log(`Starting order sync for store: ${store.name} (${store.id})${store.proxyUrl ? ' using proxy' : ''}`);
-
     const params = {
       size: 200,
       orderByField: 'PackageLastModifiedDate',

@@ -12,7 +12,6 @@ import { ProductsModule } from '../products/products.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([Order]),
-    ScheduleModule.forRoot(),
     StoresModule,
     ProductsModule,
   ],

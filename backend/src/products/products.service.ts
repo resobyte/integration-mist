@@ -255,8 +255,6 @@ export class ProductsService {
         store.proxyUrl || undefined,
       );
 
-      this.logger.log(`Syncing ${trendyolProducts.length} products for store: ${store.name}`);
-
       const syncedProductIds = new Set<string>();
       const trendyolBarcodes = new Set(trendyolProducts.map((p) => p.barcode));
       const trendyolProductIds = new Set(trendyolProducts.map((p) => p.id));
@@ -292,11 +290,8 @@ export class ProductsService {
           existingProduct.isActive = false;
           await this.productRepository.save(existingProduct);
           deactivated++;
-          this.logger.log(`Deactivated product: ${existingProduct.name} (${existingProduct.barcode})`);
         }
       }
-
-      this.logger.log(`Sync completed for store ${store.name}: created=${created}, updated=${updated}, deactivated=${deactivated}, errors=${errors}`);
 
       return {
         storeId: store.id,

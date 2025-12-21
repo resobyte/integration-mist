@@ -34,7 +34,6 @@ export class SeedService {
       });
 
       if (existingUser) {
-        this.logger.log(`User with email ${seedEmail} already exists. Skipping seed.`);
         return;
       }
 
@@ -50,8 +49,6 @@ export class SeedService {
       });
 
       await this.userRepository.save(adminUser);
-
-      this.logger.log(`Seed completed successfully. Admin user created: ${seedEmail}`);
     } catch (error) {
       this.logger.error('Error during seed:', error);
       throw error;

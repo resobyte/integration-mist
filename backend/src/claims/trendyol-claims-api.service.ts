@@ -85,14 +85,10 @@ interface GetClaimsParams {
 export class TrendyolClaimsApiService {
   private readonly logger = new Logger(TrendyolClaimsApiService.name);
   private readonly baseUrl: string;
-  private readonly axiosInstance: AxiosInstance;
 
   constructor(private readonly configService: ConfigService) {
     this.baseUrl = this.configService.get<string>('TRENDYOL_ORDER_API_URL') || 
                    'https://apigw.trendyol.com/integration/order/sellers';
-    this.axiosInstance = axios.create({
-      timeout: 30000,
-    });
   }
 
   private getAuthHeader(apiKey: string, apiSecret: string): string {
@@ -114,17 +110,20 @@ export class TrendyolClaimsApiService {
         'Content-Type': 'application/json',
       },
       params: params,
+      timeout: 30000,
     };
 
     if (proxyUrl) {
-      axiosConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
-      axiosConfig.proxy = false;
+      try {
+        axiosConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
+        axiosConfig.proxy = false;
+      } catch (proxyError) {
+        this.logger.error(`Invalid proxy URL for ${sellerId}: ${proxyUrl}`);
+      }
     }
 
-    this.logger.log(`Fetching claims from Trendyol for sellerId: ${sellerId}${proxyUrl ? ' via proxy' : ''}`);
-
     try {
-      const response = await this.axiosInstance.get<TrendyolClaimsResponse>(url, axiosConfig);
+      const response = await axios.get<TrendyolClaimsResponse>(url, axiosConfig);
       return response.data;
     } catch (error) {
       this.logger.error(`Trendyol Claims API error: ${error.message}`);
@@ -182,15 +181,20 @@ export class TrendyolClaimsApiService {
         Authorization: this.getAuthHeader(apiKey, apiSecret),
         'Content-Type': 'application/json',
       },
+      timeout: 30000,
     };
 
     if (proxyUrl) {
-      axiosConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
-      axiosConfig.proxy = false;
+      try {
+        axiosConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
+        axiosConfig.proxy = false;
+      } catch (proxyError) {
+        this.logger.error(`Invalid proxy URL for ${sellerId}: ${proxyUrl}`);
+      }
     }
 
     try {
-      await this.axiosInstance.put(
+      await axios.put(
         url,
         {
           claimLineItemIdList,

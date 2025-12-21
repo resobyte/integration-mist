@@ -34,7 +34,6 @@ export function LoginForm() {
       });
 
       const data = await response.json();
-      console.log('Login response:', data);
       
       if (!response.ok) {
         setError(data.message || 'Giriş başarısız');
@@ -47,15 +46,7 @@ export function LoginForm() {
       const refreshToken = data.refreshToken || data.data?.refreshToken;
 
       if (user && accessToken && refreshToken) {
-        console.log('Setting tokens:', { accessToken: accessToken.substring(0, 20) + '...', refreshToken: refreshToken.substring(0, 20) + '...' });
         setTokens(accessToken, refreshToken);
-        
-        const savedAccessToken = localStorage.getItem('access_token');
-        const savedRefreshToken = localStorage.getItem('refresh_token');
-        console.log('Tokens saved:', { 
-          accessToken: savedAccessToken ? savedAccessToken.substring(0, 20) + '...' : 'null',
-          refreshToken: savedRefreshToken ? savedRefreshToken.substring(0, 20) + '...' : 'null'
-        });
         
         const redirectUrl = callbackUrl || getDefaultRouteByRole(user.role);
         setTimeout(() => {

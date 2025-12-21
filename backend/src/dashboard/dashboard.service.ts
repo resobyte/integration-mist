@@ -104,10 +104,8 @@ export class DashboardService implements OnModuleInit {
     };
   }
 
-  @Cron(CronExpression.EVERY_10_MINUTES)
+  @Cron(CronExpression.EVERY_MINUTE)
   async refreshExternalStats() {
-    this.logger.log('Refreshing dashboard external stats...');
-    
     try {
       const stores = await this.storeRepository.find({
         where: { isActive: true },
@@ -152,7 +150,6 @@ export class DashboardService implements OnModuleInit {
 
       const stats = { waitingClaims, waitingQuestions };
       await this.cacheManager.set(this.EXTERNAL_STATS_CACHE_KEY, stats, 1200000); // 20 min cache
-      this.logger.log('Dashboard external stats refreshed.');
       return stats;
     } catch (error) {
       this.logger.error('Failed to refresh dashboard external stats:', error);

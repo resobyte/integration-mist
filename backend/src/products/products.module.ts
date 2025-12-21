@@ -11,7 +11,6 @@ import { Store } from '../stores/entities/store.entity';
 @Module({
   imports: [
     TypeOrmModule.forFeature([Product, Store]),
-    ScheduleModule.forRoot(),
   ],
   controllers: [ProductsController],
   providers: [ProductsService, ProductsCronService, TrendyolProductApiService],

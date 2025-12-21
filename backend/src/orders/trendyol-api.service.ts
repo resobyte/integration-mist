@@ -47,13 +47,8 @@ interface TrendyolOrder {
 @Injectable()
 export class TrendyolApiService {
   private readonly logger = new Logger(TrendyolApiService.name);
-  private readonly axiosInstance: AxiosInstance;
 
-  constructor(private readonly configService: ConfigService) {
-    this.axiosInstance = axios.create({
-      timeout: 30000,
-    });
-  }
+  constructor(private readonly configService: ConfigService) {}
 
   async getOrders(
     sellerId: string,
@@ -94,9 +89,6 @@ export class TrendyolApiService {
       const base64Token = Buffer.from(tokenString, 'utf8').toString('base64');
       const authToken = `Basic ${base64Token}`;
 
-      this.logger.log(`Fetching orders from Trendyol for sellerId: ${sellerId}${proxyUrl ? ' via proxy' : ''}`);
-      this.logger.debug(`User-Agent: ${userAgent}`);
-
       const axiosConfig: any = {
         headers: {
           'Authorization': authToken,
@@ -106,17 +98,19 @@ export class TrendyolApiService {
         },
         maxRedirects: 0,
         maxBodyLength: Infinity,
+        timeout: 30000,
       };
 
       if (proxyUrl) {
-        axiosConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
-        // Disable proxy settings from environment variables if using custom agent
-        axiosConfig.proxy = false;
+        try {
+          axiosConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
+          axiosConfig.proxy = false;
+        } catch (proxyError) {
+          this.logger.error(`Invalid proxy URL for ${sellerId}: ${proxyUrl}`);
+        }
       }
 
-      const response = await this.axiosInstance.get<TrendyolOrderResponse>(fullUrl, axiosConfig);
-
-      this.logger.log(`Successfully fetched ${response.data.content.length} orders from Trendyol`);
+      const response = await axios.get<TrendyolOrderResponse>(fullUrl, axiosConfig);
 
       return response.data;
     } catch (error) {
@@ -165,8 +159,6 @@ export class TrendyolApiService {
       const base64Token = Buffer.from(tokenString, 'utf8').toString('base64');
       const authToken = `Basic ${base64Token}`;
 
-      this.logger.log(`Updating package status to Picking for packageId: ${packageId}, sellerId: ${sellerId}${proxyUrl ? ' via proxy' : ''}`);
-
       const axiosConfig: any = {
         headers: {
           'Authorization': authToken,
@@ -175,14 +167,19 @@ export class TrendyolApiService {
           'User-Agent': userAgent,
         },
         maxRedirects: 0,
+        timeout: 30000,
       };
 
       if (proxyUrl) {
-        axiosConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
-        axiosConfig.proxy = false;
+        try {
+          axiosConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
+          axiosConfig.proxy = false;
+        } catch (proxyError) {
+          this.logger.error(`Invalid proxy URL for ${sellerId}: ${proxyUrl}`);
+        }
       }
 
-      const response = await this.axiosInstance.put(
+      await axios.put(
         url,
         {
           lines,
@@ -191,8 +188,6 @@ export class TrendyolApiService {
         },
         axiosConfig,
       );
-
-      this.logger.log(`Successfully updated package status to Picking for packageId: ${packageId}`);
 
       return true;
     } catch (error) {

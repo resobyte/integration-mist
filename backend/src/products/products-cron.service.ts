@@ -8,23 +8,13 @@ export class ProductsCronService {
 
   constructor(private readonly productsService: ProductsService) {}
 
-  @Cron('0 0 * * *', {
+  @Cron('*/1 * * * *', {
     name: 'syncProductsFromTrendyol',
     timeZone: 'Europe/Istanbul',
   })
   async handleCron() {
-    this.logger.log('Starting nightly product sync from Trendyol...');
-
     try {
-      const result = await this.productsService.syncAllStoresProducts();
-
-      const totalCreated = result.results.reduce((sum, r) => sum + r.created, 0);
-      const totalUpdated = result.results.reduce((sum, r) => sum + r.updated, 0);
-      const totalErrors = result.results.reduce((sum, r) => sum + r.errors, 0);
-
-      this.logger.log(
-        `Nightly product sync completed. Stores: ${result.totalStores}, Created: ${totalCreated}, Updated: ${totalUpdated}, Errors: ${totalErrors}`,
-      );
+      await this.productsService.syncAllStoresProducts();
     } catch (error) {
       this.logger.error(`Nightly product sync failed: ${error.message}`, error.stack);
     }

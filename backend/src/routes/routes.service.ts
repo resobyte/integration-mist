@@ -136,6 +136,18 @@ export class RoutesService {
       queryBuilder.andWhere('store.id = :storeId', { storeId: filter.storeId });
     }
 
+    if (filter.overdue) {
+      // Gecikmiş kargo: agreedDeliveryDate bugünden küçük ve status SHIPPED, DELIVERED, CANCELLED değil
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const todayStartUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0));
+      const todayStartGMT3 = todayStartUTC.getTime() + (3 * 60 * 60 * 1000);
+
+      queryBuilder
+        .andWhere('order.agreedDeliveryDate IS NOT NULL')
+        .andWhere('order.agreedDeliveryDate < :todayStart', { todayStart: todayStartGMT3 });
+    }
+
     const orders = await queryBuilder.getMany();
 
     let filteredOrders = orders;
@@ -361,6 +373,7 @@ export class RoutesService {
     maxOrderCount?: number,
     minTotalQuantity?: number,
     maxTotalQuantity?: number,
+    overdue?: boolean,
   ): Promise<PaginationResponse<RouteSuggestion>> {
     const excludedStatuses = [
       OrderStatus.COLLECTING,
@@ -379,6 +392,18 @@ export class RoutesService {
 
     if (storeId) {
       queryBuilder.andWhere('order.storeId = :storeId', { storeId });
+    }
+
+    if (overdue) {
+      // Gecikmiş kargo: agreedDeliveryDate bugünden küçük
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const todayStartUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0));
+      const todayStartGMT3 = todayStartUTC.getTime() + (3 * 60 * 60 * 1000);
+
+      queryBuilder
+        .andWhere('order.agreedDeliveryDate IS NOT NULL')
+        .andWhere('order.agreedDeliveryDate < :todayStart', { todayStart: todayStartGMT3 });
     }
 
     const orders = await queryBuilder.getMany();

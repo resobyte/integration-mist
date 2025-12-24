@@ -24,6 +24,7 @@ interface FilterData {
   maxOrderCount?: number;
   minTotalQuantity?: number;
   maxTotalQuantity?: number;
+  overdue?: boolean;
 }
 
 interface RouteSuggestionProduct {
@@ -87,6 +88,7 @@ export function RoutesTable() {
     maxOrderCount: undefined,
     minTotalQuantity: undefined,
     maxTotalQuantity: undefined,
+    overdue: false,
   });
   const [filterProductSearch, setFilterProductSearch] = useState('');
   const [isFilterProductDropdownOpen, setIsFilterProductDropdownOpen] = useState(false);
@@ -109,6 +111,7 @@ export function RoutesTable() {
     maxOrderCount?: number;
     minTotalQuantity?: number;
     maxTotalQuantity?: number;
+    overdue?: boolean;
   }>({
     type: undefined,
     productBarcodes: [],
@@ -117,6 +120,7 @@ export function RoutesTable() {
     maxOrderCount: undefined,
     minTotalQuantity: undefined,
     maxTotalQuantity: undefined,
+    overdue: false,
   });
   const [suggestionPagination, setSuggestionPagination] = useState({
     page: 1,
@@ -205,6 +209,9 @@ export function RoutesTable() {
       }
       if (suggestionFilters.maxTotalQuantity !== undefined) {
         params.maxTotalQuantity = suggestionFilters.maxTotalQuantity;
+      }
+      if (suggestionFilters.overdue) {
+        params.overdue = 'true';
       }
       const response = await apiGetPaginated<RouteSuggestion>('/routes/suggestions', { params });
       setSuggestions(response.data || []);
@@ -313,6 +320,9 @@ export function RoutesTable() {
       }
       if (filterData.maxTotalQuantity !== undefined) {
         params.maxTotalQuantity = filterData.maxTotalQuantity;
+      }
+      if (filterData.overdue) {
+        params.overdue = 'true';
       }
 
       const response = await apiGet<any[]>('/routes/filter-orders', { params });
@@ -930,7 +940,7 @@ export function RoutesTable() {
 
         {!isSuggestionsCollapsed && (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 mb-3 p-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3 mb-3 p-4">
                 <div>
               <label className="block text-xs text-muted-foreground mb-2">Rota Tipi</label>
               <select
@@ -1162,6 +1172,22 @@ export function RoutesTable() {
                   min="0"
                 />
               </div>
+            </div>
+            <div className="flex items-end">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={suggestionFilters.overdue || false}
+                  onChange={(e) => {
+                    setSuggestionFilters({
+                      ...suggestionFilters,
+                      overdue: e.target.checked,
+                    });
+                  }}
+                  className="w-4 h-4 rounded border-input text-primary focus:ring-2 focus:ring-primary focus:ring-offset-2 cursor-pointer"
+                />
+                <span className="text-xs text-foreground font-medium">Gecikmiş Kargo</span>
+              </label>
             </div>
           </div>
 
@@ -1508,16 +1534,17 @@ export function RoutesTable() {
           onClick={(e) => {
             if (e.target === e.currentTarget) {
               setIsFilterModalOpen(false);
-              setFilterData({
-                productBarcodes: [],
-                brand: undefined,
-                type: undefined,
-                storeId: undefined,
-                minOrderCount: undefined,
-                maxOrderCount: undefined,
-                minTotalQuantity: undefined,
-                maxTotalQuantity: undefined,
-              });
+                  setFilterData({
+                    productBarcodes: [],
+                    brand: undefined,
+                    type: undefined,
+                    storeId: undefined,
+                    minOrderCount: undefined,
+                    maxOrderCount: undefined,
+                    minTotalQuantity: undefined,
+                    maxTotalQuantity: undefined,
+                    overdue: false,
+                  });
             }
           }}
         >
@@ -1527,15 +1554,16 @@ export function RoutesTable() {
               <button
                 onClick={() => {
                   setIsFilterModalOpen(false);
-                  setFilterData({
-                    productBarcodes: [],
-                    type: undefined,
-                    storeId: undefined,
-                    minOrderCount: undefined,
-                    maxOrderCount: undefined,
-                    minTotalQuantity: undefined,
-                    maxTotalQuantity: undefined,
-                  });
+                    setFilterData({
+                      productBarcodes: [],
+                      type: undefined,
+                      storeId: undefined,
+                      minOrderCount: undefined,
+                      maxOrderCount: undefined,
+                      minTotalQuantity: undefined,
+                      maxTotalQuantity: undefined,
+                      overdue: false,
+                    });
                 }}
                 className="text-muted-foreground hover:text-foreground"
               >
@@ -1763,6 +1791,22 @@ export function RoutesTable() {
                     min="0"
                   />
                 </div>
+              </div>
+              <div className="pt-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={filterData.overdue || false}
+                    onChange={(e) => {
+                      setFilterData({
+                        ...filterData,
+                        overdue: e.target.checked,
+                      });
+                    }}
+                    className="w-4 h-4 rounded border-input text-primary focus:ring-2 focus:ring-primary focus:ring-offset-2 cursor-pointer"
+                  />
+                  <span className="text-sm text-foreground font-medium">Gecikmiş Kargo</span>
+                </label>
               </div>
               <div className="flex justify-end space-x-3 pt-4">
                 <button

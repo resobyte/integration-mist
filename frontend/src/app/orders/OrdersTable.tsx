@@ -281,7 +281,7 @@ export function OrdersTable() {
     { key: 'expand', label: '' },
     { key: 'orderNumber', label: 'Sipariş No' },
     { key: 'orderDate', label: 'Sipariş Tarihi' },
-    { key: 'agreedDeliveryDate', label: 'Kargoya Verme Tarihi' },
+    { key: 'agreedDeliveryDate', label: 'Kargoya Verilmesi Gereken Tarih' },
     { key: 'customerFirstName', label: 'Müşteri' },
     { key: 'totalPrice', label: 'Tutar' },
     { key: 'status', label: 'Durum' },
@@ -566,27 +566,57 @@ export function OrdersTable() {
                               const gmt3Timestamp = Number(order.agreedDeliveryDate);
                               const utcTimestamp = gmt3Timestamp - (3 * 60 * 60 * 1000);
                               const deliveryDate = new Date(utcTimestamp);
-                              const now = new Date(currentTime);
-                              const diff = deliveryDate.getTime() - now.getTime();
+                              
+                              // Sadece PENDING statüsündeki siparişler için gecikmiş kargo kontrolü yap
+                              if (order.status === OrderStatus.PENDING) {
+                                const now = new Date(currentTime);
+                                const diff = deliveryDate.getTime() - now.getTime();
 
-                              if (diff < 0) {
-                                // Tarih geçmiş
-                                return (
-                                  <span className="text-red-600 font-medium">Geciken kargo</span>
-                                );
+                                if (diff < 0) {
+                                  // Tarih geçmiş
+                                  return (
+                                    <div className="flex flex-col">
+                                      <span className="text-red-600 font-medium">Geciken kargo</span>
+                                      <span className="text-xs text-muted-foreground mt-1">
+                                        {deliveryDate.toLocaleDateString('tr-TR', {
+                                          year: 'numeric',
+                                          month: '2-digit',
+                                          day: '2-digit',
+                                          hour: '2-digit',
+                                          minute: '2-digit',
+                                          timeZone: 'Europe/Istanbul',
+                                        })}
+                                      </span>
+                                    </div>
+                                  );
+                                } else {
+                                  // Geri sayım
+                                  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+                                  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                                  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                                  
+                                  const parts = [];
+                                  if (days > 0) parts.push(`${String(days).padStart(2, '0')} gün`);
+                                  if (hours > 0 || days > 0) parts.push(`${String(hours).padStart(2, '0')} saat`);
+                                  parts.push(`${String(minutes).padStart(2, '0')} dakika`);
+                                  
+                                  return (
+                                    <span className="text-muted-foreground">{parts.join(' ')}</span>
+                                  );
+                                }
                               } else {
-                                // Geri sayım
-                                const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-                                const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-                                
-                                const parts = [];
-                                if (days > 0) parts.push(`${String(days).padStart(2, '0')} gün`);
-                                if (hours > 0 || days > 0) parts.push(`${String(hours).padStart(2, '0')} saat`);
-                                parts.push(`${String(minutes).padStart(2, '0')} dakika`);
-                                
+                                // Diğer statülerde normal tarih göster
                                 return (
-                                  <span className="text-muted-foreground">{parts.join(' ')}</span>
+                                  <span className="text-muted-foreground">
+                                    {deliveryDate.toLocaleDateString('tr-TR', {
+                                      year: 'numeric',
+                                      month: '2-digit',
+                                      day: '2-digit',
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                      timeZone: 'Europe/Istanbul',
+                                    })}
+                                  </span>
                                 );
                               }
                             })()

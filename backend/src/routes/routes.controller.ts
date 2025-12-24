@@ -57,6 +57,7 @@ export class RoutesController {
     @Query('maxOrderCount') maxOrderCount?: string,
     @Query('minTotalQuantity') minTotalQuantity?: string,
     @Query('maxTotalQuantity') maxTotalQuantity?: string,
+    @Query('overdue') overdue?: string,
   ) {
     const paginationDto: PaginationDto = {
       page: page ? parseInt(page, 10) : 1,
@@ -65,6 +66,7 @@ export class RoutesController {
       sortOrder: sortOrder || 'DESC',
     };
     const finalStoreId = storeId || (paginationDto as any).storeId;
+    const isOverdue = overdue === 'true';
     return this.routesService.getRouteSuggestions(
       finalStoreId,
       paginationDto,
@@ -74,6 +76,7 @@ export class RoutesController {
       maxOrderCount ? parseInt(maxOrderCount, 10) : undefined,
       minTotalQuantity ? parseInt(minTotalQuantity, 10) : undefined,
       maxTotalQuantity ? parseInt(maxTotalQuantity, 10) : undefined,
+      isOverdue,
     );
   }
 

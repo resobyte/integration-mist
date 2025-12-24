@@ -37,5 +37,25 @@ export class OrdersCronService {
       this.logger.error(`Error in scheduled order fetch job: ${error.message}`, error.stack);
     }
   }
+
+  @Cron('0 * * * *')
+  async handleNonDeliveredOrdersSync() {
+    try {
+      this.logger.log('Starting non-delivered orders sync job...');
+      const result = await this.ordersService.syncAllNonDeliveredOrders();
+      
+      const totalUpdated = result.results.reduce((sum, r) => sum + r.updated, 0);
+      const totalSkipped = result.results.reduce((sum, r) => sum + r.skipped, 0);
+      const totalNotFound = result.results.reduce((sum, r) => sum + r.notFound, 0);
+      const totalErrors = result.results.reduce((sum, r) => sum + r.errors, 0);
+      
+      this.logger.log(
+        `Non-delivered orders sync completed: ${result.totalStores} stores processed, ` +
+        `${totalUpdated} updated, ${totalSkipped} skipped, ${totalNotFound} not found, ${totalErrors} errors`
+      );
+    } catch (error) {
+      this.logger.error(`Error in non-delivered orders sync job: ${error.message}`, error.stack);
+    }
+  }
 }
 

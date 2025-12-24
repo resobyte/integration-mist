@@ -47,5 +47,9 @@ export class RouteFilterDto {
   @Type(() => Number)
   @IsNumber()
   maxTotalQuantity?: number;
+
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  overdue?: boolean;
 }
 

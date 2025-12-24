@@ -4,7 +4,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { Order, OrderStatus, TrendyolOrderStatus } from './entities/order.entity';
 import { TrendyolApiService } from './trendyol-api.service';
 import { StoresService } from '../stores/stores.service';
@@ -52,6 +52,7 @@ export class OrdersService {
       size: 200,
       orderByField: 'PackageLastModifiedDate',
       orderByDirection: 'DESC' as const,
+      status: TrendyolOrderStatus.CREATED,
     };
 
     let page = 0;
@@ -96,6 +97,12 @@ export class OrdersService {
             const existingOrder = await this.orderRepository.findOne({
               where: { shipmentPackageId: trendyolOrder.shipmentPackageId },
             });
+
+            // Eğer sipariş COLLECTING veya PACKED statüsündeyse, status'ünü koru (kullanıcı işlem yapıyor)
+            if (existingOrder && (existingOrder.status === OrderStatus.COLLECTING || existingOrder.status === OrderStatus.PACKED)) {
+              this.logger.debug(`Order ${trendyolOrder.orderNumber} (packageId: ${trendyolOrder.shipmentPackageId}) is ${existingOrder.status}, skipping status update to avoid overwriting user's work`);
+              continue;
+            }
 
             const orderData = {
               storeId: store.id,
@@ -220,17 +227,12 @@ export class OrdersService {
     }
 
     if (overdue) {
-      // Gecikmiş kargo: agreedDeliveryDate bugünden küçük ve status SHIPPED, DELIVERED, CANCELLED değil
-      // agreedDeliveryDate GMT+3 formatında timestamp olarak gelir
       const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      // GMT+3'e göre bugünün başlangıcı timestamp'i
-      const todayStartUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0));
-      const todayStartGMT3 = todayStartUTC.getTime() + (3 * 60 * 60 * 1000);
-
+      const nowGMT3 = now.getTime() + (3 * 60 * 60 * 1000);
+      
       queryBuilder
         .andWhere('order.agreedDeliveryDate IS NOT NULL')
-        .andWhere('order.agreedDeliveryDate < :todayStart', { todayStart: todayStartGMT3 })
+        .andWhere('order.agreedDeliveryDate < :nowGMT3', { nowGMT3 })
         .andWhere('order.status NOT IN (:...excludedStatuses)', {
           excludedStatuses: [OrderStatus.SHIPPED, OrderStatus.DELIVERED, OrderStatus.CANCELLED],
         });
@@ -389,6 +391,18 @@ export class OrdersService {
         const trendyolOrder = trendyolCreatedOrders.get(packageId);
         if (!trendyolOrder) continue;
 
+        // Eğer bu sipariş local DB'de COLLECTING veya PACKED statüsündeyse, es geç (kullanıcı rotaya eklemiş veya paketlemiş)
+        const existingCollectingOrPackedOrder = await this.orderRepository.findOne({
+          where: {
+            shipmentPackageId: packageId,
+            status: In([OrderStatus.COLLECTING, OrderStatus.PACKED]),
+          },
+        });
+        if (existingCollectingOrPackedOrder) {
+          this.logger.debug(`Order ${packageId} is COLLECTING or PACKED, skipping update to avoid overwriting user's work`);
+          continue;
+        }
+
         const orderBarcodes = this.extractBarcodesFromLines(trendyolOrder.lines);
         
         if (orderBarcodes.length > 0) {
@@ -444,6 +458,12 @@ export class OrdersService {
       try {
         const dbOrder = dbCreatedOrders.find((o) => o.shipmentPackageId === packageId);
         if (!dbOrder) continue;
+
+        // Eğer bu sipariş COLLECTING veya PACKED statüsündeyse, es geç (kullanıcı rotaya eklemiş veya paketlemiş)
+        if (dbOrder.status === OrderStatus.COLLECTING || dbOrder.status === OrderStatus.PACKED) {
+          this.logger.debug(`Order ${dbOrder.orderNumber} (packageId: ${packageId}) is COLLECTING or PACKED, skipping update to avoid overwriting user's work`);
+          continue;
+        }
 
         const trendyolOrder = await this.trendyolApiService.getOrderByPackageId(
           store.sellerId,
@@ -710,6 +730,180 @@ export class OrdersService {
     };
   }
 
+  async syncAllNonDeliveredOrders(): Promise<{
+    totalStores: number;
+    results: Array<{
+      storeId: string;
+      storeName: string;
+      total: number;
+      updated: number;
+      skipped: number;
+      notFound: number;
+      errors: number;
+      error?: string;
+    }>;
+  }> {
+    const storesResponse = await this.storesService.findAll(
+      { page: 1, limit: 1000, sortBy: 'createdAt', sortOrder: 'ASC' },
+    );
+
+    const stores = storesResponse.data.filter(
+      (store) => store.sellerId && store.apiKey && store.apiSecret && store.isActive,
+    );
+
+    const results = [];
+
+    for (const store of stores) {
+      try {
+        const result = await this.syncNonDeliveredOrders(store.id);
+        results.push({
+          storeId: store.id,
+          storeName: store.name,
+          total: result.total,
+          updated: result.updated,
+          skipped: result.skipped,
+          notFound: result.notFound,
+          errors: result.errors,
+        });
+      } catch (error) {
+        results.push({
+          storeId: store.id,
+          storeName: store.name,
+          total: 0,
+          updated: 0,
+          skipped: 0,
+          notFound: 0,
+          errors: 1,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    }
+
+    return {
+      totalStores: stores.length,
+      results,
+    };
+  }
+
+  async syncNonDeliveredOrders(storeId: string): Promise<{
+    total: number;
+    updated: number;
+    skipped: number;
+    notFound: number;
+    errors: number;
+  }> {
+    const store = await this.storesService.findOne(storeId);
+    
+    if (!store.sellerId) {
+      throw new NotFoundException('Store sellerId not found');
+    }
+
+    if (!store.apiKey || !store.apiSecret) {
+      throw new NotFoundException('Store API Key or API Secret not found');
+    }
+
+    // DELIVERED olmayan ve aktif olan tüm siparişleri çek
+    const nonDeliveredOrders = await this.orderRepository.find({
+      where: {
+        storeId,
+        status: In([
+          OrderStatus.PENDING,
+          OrderStatus.PROCESSING,
+          OrderStatus.COLLECTING,
+          OrderStatus.PACKED,
+          OrderStatus.SHIPPED,
+          OrderStatus.CANCELLED,
+          OrderStatus.RETURNED,
+        ]),
+        isActive: true,
+      },
+      order: { createdAt: 'DESC' },
+    });
+
+    let updated = 0;
+    let skipped = 0;
+    let notFound = 0;
+    let errors = 0;
+
+    this.logger.log(`Syncing ${nonDeliveredOrders.length} non-delivered orders for store ${store.name}`);
+
+    for (const order of nonDeliveredOrders) {
+      try {
+        // COLLECTING veya PACKED statüsündeki siparişleri atla (kullanıcı işlem yapıyor)
+        if (order.status === OrderStatus.COLLECTING || order.status === OrderStatus.PACKED) {
+          skipped++;
+          continue;
+        }
+
+        const trendyolOrder = await this.trendyolApiService.getOrderByPackageId(
+          store.sellerId,
+          store.apiKey,
+          store.apiSecret,
+          order.shipmentPackageId,
+          store.proxyUrl || undefined,
+        );
+
+        if (!trendyolOrder) {
+          notFound++;
+          this.logger.warn(`Order ${order.orderNumber} (packageId: ${order.shipmentPackageId}) not found in Trendyol`);
+          continue;
+        }
+
+        const newTrendyolStatus = trendyolOrder.shipmentPackageStatus || trendyolOrder.status;
+        const newStatus = this.mapTrendyolStatusToOrderStatus(newTrendyolStatus);
+
+        // Eğer statü değişmemişse ve diğer bilgiler de aynıysa güncelleme yapma
+        if (order.trendyolStatus === newTrendyolStatus && order.status === newStatus) {
+          continue;
+        }
+
+        const orderBarcodes = this.extractBarcodesFromLines(trendyolOrder.lines);
+        
+        if (orderBarcodes.length > 0) {
+          const existingBarcodes = await this.productsService.getExistingBarcodes(orderBarcodes);
+          const missingBarcodes = orderBarcodes.filter((b) => !existingBarcodes.has(b));
+
+          if (missingBarcodes.length > 0) {
+            this.logger.warn(`Order ${order.orderNumber} has missing barcodes, skipping update`);
+            skipped++;
+            continue;
+          }
+        }
+
+        const orderData = {
+          trendyolStatus: newTrendyolStatus,
+          status: newStatus,
+          cargoTrackingNumber: trendyolOrder.cargoTrackingNumber,
+          cargoProviderName: trendyolOrder.cargoProviderName,
+          cargoTrackingLink: trendyolOrder.cargoTrackingLink,
+          lastModifiedDate: trendyolOrder.lastModifiedDate,
+          agreedDeliveryDate: trendyolOrder.agreedDeliveryDate || null,
+        };
+
+        Object.assign(order, orderData);
+        await this.orderRepository.save(order);
+        updated++;
+
+        if (updated % 10 === 0) {
+          this.logger.log(`Synced ${updated}/${nonDeliveredOrders.length} orders...`);
+        }
+      } catch (error) {
+        errors++;
+        this.logger.error(`Error syncing order ${order.orderNumber}: ${error.message}`, error.stack);
+      }
+    }
+
+    this.logger.log(`Non-delivered sync completed for store ${store.name}: ${updated} updated, ${skipped} skipped, ${notFound} not found, ${errors} errors`);
+
+    return {
+      total: nonDeliveredOrders.length,
+      updated,
+      skipped,
+      notFound,
+      errors,
+    };
+  }
+
   async fetchAllStoresOrders(): Promise<{
     totalStores: number;
     results: Array<{
@@ -765,4 +959,3 @@ export class OrdersService {
     };
   }
 }
-

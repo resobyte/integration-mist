@@ -44,6 +44,63 @@ export class OrdersController {
     };
   }
 
+  @Post('sync-created-all')
+  @HttpCode(HttpStatus.OK)
+  async syncAllStoresCreatedOrders() {
+    const result = await this.ordersService.syncAllStoresCreatedOrders();
+    const totalInitialSync = result.results.filter((r) => r.initialSync).length;
+    const totalInitialSaved = result.results.reduce((sum, r) => sum + r.initialSyncSaved, 0);
+    const totalNew = result.results.reduce((sum, r) => sum + r.newOrdersAdded, 0);
+    const totalUpdated = result.results.reduce((sum, r) => sum + r.ordersUpdated, 0);
+    const totalSkipped = result.results.reduce((sum, r) => sum + r.ordersSkipped, 0);
+    const totalErrors = result.results.reduce((sum, r) => sum + r.errors, 0);
+    
+    let message = '';
+    if (totalInitialSync > 0) {
+      message = `${totalInitialSync} mağaza için ilk senkronizasyon yapıldı (${totalInitialSaved} sipariş kaydedildi). `;
+    }
+    message += `${result.totalStores} mağaza işlendi: ${totalNew} yeni eklendi, ${totalUpdated} güncellendi, ${totalSkipped} atlandı, ${totalErrors} hata`;
+    
+    return {
+      success: true,
+      message,
+      data: result,
+    };
+  }
+
+  @Post('sync-created/:storeId')
+  @HttpCode(HttpStatus.OK)
+  async syncCreatedOrders(@Param('storeId') storeId: string) {
+    const result = await this.ordersService.syncCreatedOrders(storeId);
+    let message = '';
+    if (result.initialSync) {
+      message = `Initial sync completed. Saved ${result.initialSyncSaved} orders with all statuses. `;
+    }
+    message += `CREATED orders synced. Trendyol: ${result.trendyolCreatedCount}, DB: ${result.dbCreatedCount}, New: ${result.newOrdersAdded}, Updated: ${result.ordersUpdated}, Skipped: ${result.ordersSkipped}, Errors: ${result.errors}`;
+    return {
+      success: true,
+      message,
+      data: result,
+    };
+  }
+
+  @Post('sync/:storeId')
+  @HttpCode(HttpStatus.OK)
+  async syncExistingOrders(
+    @Param('storeId') storeId: string,
+    @Query('status') status?: string,
+  ) {
+    const orderStatus = status && Object.values(OrderStatus).includes(status as OrderStatus) 
+      ? (status as OrderStatus) 
+      : undefined;
+    const result = await this.ordersService.syncExistingOrders(storeId, orderStatus);
+    return {
+      success: true,
+      message: `Orders synced successfully. Total: ${result.total}, Updated: ${result.updated}, Not Found: ${result.notFound}, Errors: ${result.errors}`,
+      data: result,
+    };
+  }
+
   @Get()
   async findAll(
     @Query('page') page?: string,

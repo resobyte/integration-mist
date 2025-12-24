@@ -55,7 +55,7 @@ export async function login(
         const isRefresh = name.trim().includes('refresh');
         cookieStore.set(name.trim(), value.trim(), {
           ...cookieOptions,
-          maxAge: isRefresh ? 7 * 24 * 60 * 60 : 15 * 60,
+          maxAge: isRefresh ? 7 * 24 * 60 * 60 : 24 * 60 * 60,
         });
       }
     }
@@ -139,7 +139,7 @@ export async function refreshAccessToken(): Promise<boolean> {
         const isRefresh = name.trim().includes('refresh');
         cookieStore.set(name.trim(), value.trim(), {
           ...cookieOptions,
-          maxAge: isRefresh ? 7 * 24 * 60 * 60 : 15 * 60,
+          maxAge: isRefresh ? 7 * 24 * 60 * 60 : 24 * 60 * 60,
         });
       }
     }

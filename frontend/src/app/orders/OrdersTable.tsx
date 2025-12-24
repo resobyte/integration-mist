@@ -149,22 +149,59 @@ export function OrdersTable() {
     try {
       const response = await apiPost<{
         totalStores: number;
-        results: FetchResult[];
-      }>('/orders/fetch-all', {});
+        results: Array<{
+          storeId: string;
+          storeName: string;
+          initialSync: boolean;
+          initialSyncSaved: number;
+          trendyolCreatedCount: number;
+          dbCreatedCount: number;
+          newOrdersAdded: number;
+          ordersUpdated: number;
+          ordersSkipped: number;
+          errors: number;
+          error?: string;
+        }>;
+      }>('/orders/sync-created-all', {});
 
       const { results } = response.data;
-      const hasSkipped = results.some((r) => r.skipped > 0);
-      const totalSaved = results.reduce((sum, r) => sum + r.saved, 0);
-      const totalUpdated = results.reduce((sum, r) => sum + r.updated, 0);
-      const totalSkipped = results.reduce((sum, r) => sum + r.skipped, 0);
+      const hasSkipped = results.some((r) => r.ordersSkipped > 0);
+      const totalInitialSync = results.filter((r) => r.initialSync).length;
+      const totalInitialSaved = results.reduce((sum, r) => sum + r.initialSyncSaved, 0);
+      const totalNew = results.reduce((sum, r) => sum + r.newOrdersAdded, 0);
+      const totalUpdated = results.reduce((sum, r) => sum + r.ordersUpdated, 0);
+      const totalSkipped = results.reduce((sum, r) => sum + r.ordersSkipped, 0);
+      const totalErrors = results.reduce((sum, r) => sum + r.errors, 0);
+
+      let message = '';
+      if (totalInitialSync > 0) {
+        message = `${totalInitialSync} mağaza için ilk senkronizasyon yapıldı (${totalInitialSaved} sipariş kaydedildi). `;
+      }
+      message += `${response.data.totalStores} mağaza işlendi: ${totalNew} yeni eklendi, ${totalUpdated} güncellendi`;
+      if (totalSkipped > 0) {
+        message += `, ${totalSkipped} atlandı (eksik ürün)`;
+      }
+      if (totalErrors > 0) {
+        message += `, ${totalErrors} hata`;
+      }
 
       if (hasSkipped) {
-        setFetchResults(results.filter((r) => r.skipped > 0));
+        const skippedResults = results
+          .filter((r) => r.ordersSkipped > 0)
+          .map((r) => ({
+            storeId: r.storeId,
+            storeName: r.storeName,
+            saved: r.newOrdersAdded,
+            updated: r.ordersUpdated,
+            errors: r.errors,
+            skipped: r.ordersSkipped,
+            skippedOrders: [],
+          }));
+        setFetchResults(skippedResults);
         setShowSkippedModal(true);
-        showSuccess(`${response.data.totalStores} mağaza işlendi: ${totalSaved} eklendi, ${totalUpdated} güncellendi, ${totalSkipped} atlandı (eksik ürün)`);
-      } else {
-        showSuccess(`${response.data.totalStores} mağaza işlendi: ${totalSaved} eklendi, ${totalUpdated} güncellendi`);
       }
+
+      showSuccess(message);
       fetchOrders();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Siparişler çekilirken hata oluştu';

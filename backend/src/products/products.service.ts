@@ -82,10 +82,11 @@ export class ProductsService {
 
     const queryBuilder = this.productRepository
       .createQueryBuilder('product')
-      .leftJoinAndSelect('product.store', 'store');
+      .leftJoinAndSelect('product.store', 'store')
+      .where('store.isActive = :storeIsActive', { storeIsActive: true });
 
     if (isActive !== undefined) {
-      queryBuilder.where('product.isActive = :isActive', { isActive });
+      queryBuilder.andWhere('product.isActive = :isActive', { isActive });
     }
 
     if (search) {

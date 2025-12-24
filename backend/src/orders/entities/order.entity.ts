@@ -108,5 +108,8 @@ export class Order extends BaseEntity {
 
   @Column({ type: 'bigint', nullable: true })
   lastModifiedDate: number | null;
+
+  @Column({ type: 'boolean', default: true })
+  isActive: boolean;
 }
 

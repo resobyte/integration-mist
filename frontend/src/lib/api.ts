@@ -1,7 +1,7 @@
 import { ApiResponse, ErrorResponse, PaginationResponse } from '@/types';
 import { API_URL } from '@/config/api';
 import { getAccessToken } from './token';
-import { refreshAccessToken } from './auth-client';
+import { refreshAccessToken, logout } from './auth-client';
 
 interface FetchOptions extends RequestInit {
   params?: Record<string, string | number | string[] | number[] | undefined>;
@@ -42,6 +42,24 @@ async function handleResponse<T>(
           return handleResponse<T>(retryResponse, originalRequest, false);
         }
       }
+      
+      if (response.status === 401) {
+        await logout();
+        return Promise.reject(new ApiError(
+          'Oturumunuz sona erdi. Lütfen tekrar giriş yapın.',
+          401,
+          'UNAUTHORIZED'
+        ));
+      }
+    }
+    
+    if (response.status === 401 && typeof window !== 'undefined') {
+      await logout();
+      return Promise.reject(new ApiError(
+        'Oturumunuz sona erdi. Lütfen tekrar giriş yapın.',
+        401,
+        'UNAUTHORIZED'
+      ));
     }
     
     const errorData = data as ErrorResponse;

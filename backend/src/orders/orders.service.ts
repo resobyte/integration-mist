@@ -52,7 +52,6 @@ export class OrdersService {
       size: 200,
       orderByField: 'PackageLastModifiedDate',
       orderByDirection: 'DESC' as const,
-      status: TrendyolOrderStatus.CREATED,
     };
 
     let page = 0;
@@ -124,6 +123,7 @@ export class OrdersService {
               micro: trendyolOrder.micro || false,
               deliveryAddressType: trendyolOrder.deliveryAddressType,
               lastModifiedDate: trendyolOrder.lastModifiedDate,
+              isActive: store.isActive,
             };
 
             if (existingOrder) {
@@ -192,17 +192,19 @@ export class OrdersService {
 
     const queryBuilder = this.orderRepository
       .createQueryBuilder('order')
-      .leftJoinAndSelect('order.store', 'store');
+      .leftJoinAndSelect('order.store', 'store')
+      .where('store.isActive = :storeIsActive', { storeIsActive: true })
+      .andWhere('order.isActive = :orderIsActive', { orderIsActive: true });
 
     if (excludeStatuses && excludeStatuses.length > 0) {
-      queryBuilder.where('order.status NOT IN (:...excludeStatuses)', { excludeStatuses });
+      queryBuilder.andWhere('order.status NOT IN (:...excludeStatuses)', { excludeStatuses });
     }
 
     if (storeId) {
       if (excludeStatuses && excludeStatuses.length > 0) {
         queryBuilder.andWhere('order.storeId = :storeId', { storeId });
       } else {
-        queryBuilder.where('order.storeId = :storeId', { storeId });
+        queryBuilder.andWhere('order.storeId = :storeId', { storeId });
       }
     }
 
@@ -210,7 +212,7 @@ export class OrdersService {
       if (storeId || (excludeStatuses && excludeStatuses.length > 0)) {
         queryBuilder.andWhere('order.status = :status', { status });
       } else {
-        queryBuilder.where('order.status = :status', { status });
+        queryBuilder.andWhere('order.status = :status', { status });
       }
     }
 
@@ -238,11 +240,17 @@ export class OrdersService {
   }
 
   async getCount(status?: OrderStatus): Promise<number> {
-    const where: any = {};
+    const queryBuilder = this.orderRepository
+      .createQueryBuilder('order')
+      .leftJoin('order.store', 'store')
+      .where('store.isActive = :storeIsActive', { storeIsActive: true })
+      .andWhere('order.isActive = :orderIsActive', { orderIsActive: true });
+
     if (status) {
-      where.status = status;
+      queryBuilder.andWhere('order.status = :status', { status });
     }
-    return this.orderRepository.count({ where });
+
+    return queryBuilder.getCount();
   }
 
   async findOne(id: string): Promise<OrderResponseDto> {
@@ -257,6 +265,426 @@ export class OrdersService {
     }
 
     return OrderResponseDto.fromEntity(order, true);
+  }
+
+  async syncCreatedOrders(storeId: string): Promise<{
+    initialSync: boolean;
+    initialSyncSaved: number;
+    trendyolCreatedCount: number;
+    dbCreatedCount: number;
+    newOrdersAdded: number;
+    ordersUpdated: number;
+    ordersSkipped: number;
+    errors: number;
+  }> {
+    const store = await this.storesService.findOne(storeId);
+    
+    if (!store.sellerId) {
+      throw new NotFoundException('Store sellerId not found');
+    }
+
+    if (!store.apiKey || !store.apiSecret) {
+      throw new NotFoundException('Store API Key or API Secret not found');
+    }
+
+    const existingOrdersCount = await this.orderRepository.count({
+      where: { storeId },
+    });
+
+    let initialSync = false;
+    let initialSyncSaved = 0;
+
+    if (existingOrdersCount === 0) {
+      this.logger.log(`No orders found for store ${store.name}. Performing initial sync with all statuses...`);
+      initialSync = true;
+
+      try {
+        const initialSyncResult = await this.fetchAndSaveOrders(storeId);
+        initialSyncSaved = initialSyncResult.saved;
+        this.logger.log(`Initial sync completed. Saved ${initialSyncSaved} orders with all statuses.`);
+      } catch (error) {
+        this.logger.error(`Error during initial sync: ${error.message}`, error.stack);
+        throw error;
+      }
+    }
+
+    const params = {
+      size: 200,
+      orderByField: 'PackageLastModifiedDate',
+      orderByDirection: 'DESC' as const,
+      status: TrendyolOrderStatus.CREATED,
+    };
+
+    const trendyolCreatedOrders: Map<number, any> = new Map();
+    let page = 0;
+    let totalPages = 1;
+
+    while (page < totalPages) {
+      try {
+        const response = await this.trendyolApiService.getOrders(
+          store.sellerId,
+          store.apiKey,
+          store.apiSecret,
+          { ...params, page },
+          store.proxyUrl || undefined,
+        );
+
+        totalPages = response.totalPages;
+
+        for (const trendyolOrder of response.content) {
+          trendyolCreatedOrders.set(trendyolOrder.shipmentPackageId, trendyolOrder);
+        }
+
+        page++;
+      } catch (error) {
+        this.logger.error(`Error fetching CREATED orders from Trendyol: ${error.message}`, error.stack);
+        break;
+      }
+    }
+
+    const dbCreatedOrders = await this.orderRepository.find({
+      where: {
+        storeId,
+        status: OrderStatus.PENDING,
+      },
+    });
+
+    const trendyolPackageIds = new Set(trendyolCreatedOrders.keys());
+    const dbPackageIds = new Set(dbCreatedOrders.map((o) => o.shipmentPackageId));
+
+    const newPackageIds = new Set(
+      Array.from(trendyolPackageIds).filter((id) => !dbPackageIds.has(id))
+    );
+    const missingPackageIds = new Set(
+      Array.from(dbPackageIds).filter((id) => !trendyolPackageIds.has(id))
+    );
+
+    let newOrdersAdded = 0;
+    let ordersUpdated = 0;
+    let ordersSkipped = 0;
+    let errors = 0;
+
+    for (const packageId of newPackageIds) {
+      try {
+        const trendyolOrder = trendyolCreatedOrders.get(packageId);
+        if (!trendyolOrder) continue;
+
+        const orderBarcodes = this.extractBarcodesFromLines(trendyolOrder.lines);
+        
+        if (orderBarcodes.length > 0) {
+          const existingBarcodes = await this.productsService.getExistingBarcodes(orderBarcodes);
+          const missingBarcodes = orderBarcodes.filter((b) => !existingBarcodes.has(b));
+
+          if (missingBarcodes.length > 0) {
+            ordersSkipped++;
+            continue;
+          }
+        }
+
+        const orderData = {
+          storeId: store.id,
+          orderNumber: trendyolOrder.orderNumber,
+          shipmentPackageId: trendyolOrder.shipmentPackageId,
+          trendyolCustomerId: trendyolOrder.customerId,
+          supplierId: trendyolOrder.supplierId,
+          trendyolStatus: trendyolOrder.shipmentPackageStatus || trendyolOrder.status,
+          status: this.mapTrendyolStatusToOrderStatus(trendyolOrder.shipmentPackageStatus || trendyolOrder.status),
+          customerFirstName: trendyolOrder.customerFirstName,
+          customerLastName: trendyolOrder.customerLastName,
+          customerEmail: trendyolOrder.customerEmail,
+          orderDate: trendyolOrder.orderDate,
+          grossAmount: trendyolOrder.packageGrossAmount || trendyolOrder.grossAmount,
+          totalPrice: trendyolOrder.packageTotalPrice || trendyolOrder.totalPrice,
+          currencyCode: trendyolOrder.currencyCode,
+          cargoTrackingNumber: trendyolOrder.cargoTrackingNumber,
+          cargoProviderName: trendyolOrder.cargoProviderName,
+          cargoTrackingLink: trendyolOrder.cargoTrackingLink,
+          shipmentAddress: trendyolOrder.shipmentAddress,
+          invoiceAddress: trendyolOrder.invoiceAddress,
+          lines: trendyolOrder.lines,
+          packageHistories: trendyolOrder.packageHistories,
+          commercial: trendyolOrder.commercial || false,
+          micro: trendyolOrder.micro || false,
+          deliveryAddressType: trendyolOrder.deliveryAddressType,
+          lastModifiedDate: trendyolOrder.lastModifiedDate,
+          isActive: store.isActive,
+        };
+
+        const newOrder = this.orderRepository.create(orderData);
+        await this.orderRepository.save(newOrder);
+        newOrdersAdded++;
+      } catch (error) {
+        errors++;
+        this.logger.error(`Error adding new order ${packageId}: ${error.message}`, error.stack);
+      }
+    }
+
+    for (const packageId of missingPackageIds) {
+      try {
+        const dbOrder = dbCreatedOrders.find((o) => o.shipmentPackageId === packageId);
+        if (!dbOrder) continue;
+
+        const trendyolOrder = await this.trendyolApiService.getOrderByPackageId(
+          store.sellerId,
+          store.apiKey,
+          store.apiSecret,
+          packageId,
+          store.proxyUrl || undefined,
+        );
+
+        if (!trendyolOrder) {
+          this.logger.warn(`Order ${dbOrder.orderNumber} (packageId: ${packageId}) not found in Trendyol`);
+          continue;
+        }
+
+        const orderBarcodes = this.extractBarcodesFromLines(trendyolOrder.lines);
+        
+        if (orderBarcodes.length > 0) {
+          const existingBarcodes = await this.productsService.getExistingBarcodes(orderBarcodes);
+          const missingBarcodes = orderBarcodes.filter((b) => !existingBarcodes.has(b));
+
+          if (missingBarcodes.length > 0) {
+            this.logger.warn(`Order ${dbOrder.orderNumber} has missing barcodes, skipping update`);
+            continue;
+          }
+        }
+
+        const orderData = {
+          storeId: store.id,
+          orderNumber: trendyolOrder.orderNumber,
+          shipmentPackageId: trendyolOrder.shipmentPackageId,
+          trendyolCustomerId: trendyolOrder.customerId,
+          supplierId: trendyolOrder.supplierId,
+          trendyolStatus: trendyolOrder.shipmentPackageStatus || trendyolOrder.status,
+          status: this.mapTrendyolStatusToOrderStatus(trendyolOrder.shipmentPackageStatus || trendyolOrder.status),
+          customerFirstName: trendyolOrder.customerFirstName,
+          customerLastName: trendyolOrder.customerLastName,
+          customerEmail: trendyolOrder.customerEmail,
+          orderDate: trendyolOrder.orderDate,
+          grossAmount: trendyolOrder.packageGrossAmount || trendyolOrder.grossAmount,
+          totalPrice: trendyolOrder.packageTotalPrice || trendyolOrder.totalPrice,
+          currencyCode: trendyolOrder.currencyCode,
+          cargoTrackingNumber: trendyolOrder.cargoTrackingNumber,
+          cargoProviderName: trendyolOrder.cargoProviderName,
+          cargoTrackingLink: trendyolOrder.cargoTrackingLink,
+          shipmentAddress: trendyolOrder.shipmentAddress,
+          invoiceAddress: trendyolOrder.invoiceAddress,
+          lines: trendyolOrder.lines,
+          packageHistories: trendyolOrder.packageHistories,
+          commercial: trendyolOrder.commercial || false,
+          micro: trendyolOrder.micro || false,
+          deliveryAddressType: trendyolOrder.deliveryAddressType,
+          lastModifiedDate: trendyolOrder.lastModifiedDate,
+          isActive: store.isActive,
+        };
+
+        Object.assign(dbOrder, orderData);
+        await this.orderRepository.save(dbOrder);
+        ordersUpdated++;
+
+        if (ordersUpdated % 10 === 0) {
+          this.logger.log(`Updated ${ordersUpdated}/${missingPackageIds.size} orders...`);
+        }
+      } catch (error) {
+        errors++;
+        this.logger.error(`Error updating order ${packageId}: ${error.message}`, error.stack);
+      }
+    }
+
+    this.logger.log(
+      `CREATED sync completed: Trendyol CREATED: ${trendyolCreatedOrders.size}, DB CREATED: ${dbCreatedOrders.length}, ` +
+      `New: ${newOrdersAdded}, Updated: ${ordersUpdated}, Skipped: ${ordersSkipped}, Errors: ${errors}`
+    );
+
+    return {
+      initialSync,
+      initialSyncSaved,
+      trendyolCreatedCount: trendyolCreatedOrders.size,
+      dbCreatedCount: dbCreatedOrders.length,
+      newOrdersAdded,
+      ordersUpdated,
+      ordersSkipped,
+      errors,
+    };
+  }
+
+  async syncExistingOrders(
+    storeId: string,
+    status?: OrderStatus,
+  ): Promise<{
+    total: number;
+    updated: number;
+    notFound: number;
+    errors: number;
+  }> {
+    const store = await this.storesService.findOne(storeId);
+    
+    if (!store.sellerId) {
+      throw new NotFoundException('Store sellerId not found');
+    }
+
+    if (!store.apiKey || !store.apiSecret) {
+      throw new NotFoundException('Store API Key or API Secret not found');
+    }
+
+    const where: any = { storeId };
+    if (status) {
+      where.status = status;
+    }
+
+    const existingOrders = await this.orderRepository.find({
+      where,
+      order: { createdAt: 'DESC' },
+    });
+
+    let updated = 0;
+    let notFound = 0;
+    let errors = 0;
+
+    this.logger.log(`Syncing ${existingOrders.length} existing orders for store ${store.name}`);
+
+    for (const order of existingOrders) {
+      try {
+        const trendyolOrder = await this.trendyolApiService.getOrderByPackageId(
+          store.sellerId,
+          store.apiKey,
+          store.apiSecret,
+          order.shipmentPackageId,
+          store.proxyUrl || undefined,
+        );
+
+        if (!trendyolOrder) {
+          notFound++;
+          this.logger.warn(`Order ${order.orderNumber} (packageId: ${order.shipmentPackageId}) not found in Trendyol`);
+          continue;
+        }
+
+        const orderBarcodes = this.extractBarcodesFromLines(trendyolOrder.lines);
+        
+        if (orderBarcodes.length > 0) {
+          const existingBarcodes = await this.productsService.getExistingBarcodes(orderBarcodes);
+          const missingBarcodes = orderBarcodes.filter((b) => !existingBarcodes.has(b));
+
+          if (missingBarcodes.length > 0) {
+            this.logger.warn(`Order ${order.orderNumber} has missing barcodes, skipping update`);
+            continue;
+          }
+        }
+
+        const orderData = {
+          storeId: store.id,
+          orderNumber: trendyolOrder.orderNumber,
+          shipmentPackageId: trendyolOrder.shipmentPackageId,
+          trendyolCustomerId: trendyolOrder.customerId,
+          supplierId: trendyolOrder.supplierId,
+          trendyolStatus: trendyolOrder.shipmentPackageStatus || trendyolOrder.status,
+          status: this.mapTrendyolStatusToOrderStatus(trendyolOrder.shipmentPackageStatus || trendyolOrder.status),
+          customerFirstName: trendyolOrder.customerFirstName,
+          customerLastName: trendyolOrder.customerLastName,
+          customerEmail: trendyolOrder.customerEmail,
+          orderDate: trendyolOrder.orderDate,
+          grossAmount: trendyolOrder.packageGrossAmount || trendyolOrder.grossAmount,
+          totalPrice: trendyolOrder.packageTotalPrice || trendyolOrder.totalPrice,
+          currencyCode: trendyolOrder.currencyCode,
+          cargoTrackingNumber: trendyolOrder.cargoTrackingNumber,
+          cargoProviderName: trendyolOrder.cargoProviderName,
+          cargoTrackingLink: trendyolOrder.cargoTrackingLink,
+          shipmentAddress: trendyolOrder.shipmentAddress,
+          invoiceAddress: trendyolOrder.invoiceAddress,
+          lines: trendyolOrder.lines,
+          packageHistories: trendyolOrder.packageHistories,
+          commercial: trendyolOrder.commercial || false,
+          micro: trendyolOrder.micro || false,
+          deliveryAddressType: trendyolOrder.deliveryAddressType,
+          lastModifiedDate: trendyolOrder.lastModifiedDate,
+          isActive: store.isActive,
+        };
+
+        Object.assign(order, orderData);
+        await this.orderRepository.save(order);
+        updated++;
+
+        if (updated % 10 === 0) {
+          this.logger.log(`Synced ${updated}/${existingOrders.length} orders...`);
+        }
+      } catch (error) {
+        errors++;
+        this.logger.error(`Error syncing order ${order.orderNumber}: ${error.message}`, error.stack);
+      }
+    }
+
+    this.logger.log(`Sync completed: ${updated} updated, ${notFound} not found, ${errors} errors`);
+
+    return {
+      total: existingOrders.length,
+      updated,
+      notFound,
+      errors,
+    };
+  }
+
+  async syncAllStoresCreatedOrders(): Promise<{
+    totalStores: number;
+    results: Array<{
+      storeId: string;
+      storeName: string;
+      initialSync: boolean;
+      initialSyncSaved: number;
+      trendyolCreatedCount: number;
+      dbCreatedCount: number;
+      newOrdersAdded: number;
+      ordersUpdated: number;
+      ordersSkipped: number;
+      errors: number;
+      error?: string;
+    }>;
+  }> {
+    const storesResponse = await this.storesService.findAll(
+      { page: 1, limit: 1000, sortBy: 'createdAt', sortOrder: 'ASC' },
+    );
+
+    const stores = storesResponse.data.filter(
+      (store) => store.sellerId && store.apiKey && store.apiSecret && store.isActive,
+    );
+
+    const results = [];
+
+    for (const store of stores) {
+      try {
+        const result = await this.syncCreatedOrders(store.id);
+        results.push({
+          storeId: store.id,
+          storeName: store.name,
+          initialSync: result.initialSync,
+          initialSyncSaved: result.initialSyncSaved,
+          trendyolCreatedCount: result.trendyolCreatedCount,
+          dbCreatedCount: result.dbCreatedCount,
+          newOrdersAdded: result.newOrdersAdded,
+          ordersUpdated: result.ordersUpdated,
+          ordersSkipped: result.ordersSkipped,
+          errors: result.errors,
+        });
+      } catch (error) {
+        results.push({
+          storeId: store.id,
+          storeName: store.name,
+          initialSync: false,
+          initialSyncSaved: 0,
+          trendyolCreatedCount: 0,
+          dbCreatedCount: 0,
+          newOrdersAdded: 0,
+          ordersUpdated: 0,
+          ordersSkipped: 0,
+          errors: 1,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    }
+
+    return {
+      totalStores: stores.length,
+      results,
+    };
   }
 
   async fetchAllStoresOrders(): Promise<{

@@ -34,6 +34,9 @@ export class Route extends BaseEntity {
 
   @Column({ type: 'varchar', length: 100, nullable: true })
   labelPrintedAt: string | null;
+
+  @Column({ type: 'boolean', default: true })
+  isActive: boolean;
 }
 
 

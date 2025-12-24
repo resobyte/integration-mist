@@ -172,7 +172,7 @@ export class AuthService {
       this.jwtService.signAsync(payload, {
         secret: accessSecret,
         expiresIn:
-          this.configService.get<string>('JWT_ACCESS_EXPIRATION') || '15m',
+          this.configService.get<string>('JWT_ACCESS_EXPIRATION') || '1d',
       }),
       this.jwtService.signAsync(payload, {
         secret: refreshSecret,
@@ -213,7 +213,7 @@ export class AuthService {
       httpOnly: true,
       secure: isProduction,
       sameSite: isProduction ? 'none' : 'lax',
-      maxAge: isRefreshToken ? 7 * 24 * 60 * 60 * 1000 : 15 * 60 * 1000,
+      maxAge: isRefreshToken ? 7 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000,
       path: '/',
     };
 

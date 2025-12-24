@@ -7,6 +7,7 @@ export async function refreshAccessToken(): Promise<boolean> {
   const refreshToken = getRefreshToken();
 
   if (!refreshToken) {
+    console.warn('Refresh token not found in localStorage');
     return false;
   }
 
@@ -20,6 +21,9 @@ export async function refreshAccessToken(): Promise<boolean> {
     });
 
     if (!response.ok) {
+      console.warn('Refresh token request failed:', response.status, response.statusText);
+      const errorData = await response.json().catch(() => ({}));
+      console.warn('Refresh error details:', errorData);
       return false;
     }
 
@@ -30,8 +34,15 @@ export async function refreshAccessToken(): Promise<boolean> {
       return true;
     }
 
+    if (data.data?.accessToken && data.data?.refreshToken) {
+      setTokens(data.data.accessToken, data.data.refreshToken);
+      return true;
+    }
+
+    console.warn('Refresh response missing tokens:', data);
     return false;
-  } catch {
+  } catch (error) {
+    console.error('Refresh token error:', error);
     return false;
   }
 }

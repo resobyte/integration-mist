@@ -48,10 +48,13 @@ export class RoutesService {
       throw new BadRequestException('Some orders not found');
     }
 
+    const allStoresActive = orders.every((order) => order.store?.isActive !== false);
+    
     const route = this.routeRepository.create({
       name: createRouteDto.name,
       description: createRouteDto.description,
       status: RouteStatus.COLLECTING,
+      isActive: allStoresActive,
     });
 
     route.id = randomUUID();
@@ -81,17 +84,20 @@ export class RoutesService {
   }
 
   async findAll(status?: RouteStatus[]): Promise<RouteResponseDto[]> {
-    const where: any = {};
+    const queryBuilder = this.routeRepository
+      .createQueryBuilder('route')
+      .leftJoinAndSelect('route.orders', 'order')
+      .leftJoinAndSelect('order.store', 'store')
+      .where('route.isActive = :routeIsActive', { routeIsActive: true })
+      .andWhere('store.isActive = :storeIsActive', { storeIsActive: true });
     
     if (status && status.length > 0) {
-      where.status = In(status);
+      queryBuilder.andWhere('route.status IN (:...statuses)', { statuses: status });
     }
 
-    const routes = await this.routeRepository.find({
-      where,
-      relations: ['orders', 'orders.store'],
-      order: { createdAt: 'DESC' },
-    });
+    queryBuilder.orderBy('route.createdAt', 'DESC');
+
+    const routes = await queryBuilder.getMany();
 
     return routes.map((route) => RouteResponseDto.fromEntity(route, true));
   }

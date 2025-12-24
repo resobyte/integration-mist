@@ -2,10 +2,14 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, QueryFailedError } from 'typeorm';
+import { Repository, QueryFailedError, In } from 'typeorm';
 import { Store } from './entities/store.entity';
+import { Product } from '../products/entities/product.entity';
+import { Order } from '../orders/entities/order.entity';
+import { Route, RouteStatus } from '../routes/entities/route.entity';
 import { CreateStoreDto } from './dto/create-store.dto';
 import { UpdateStoreDto } from './dto/update-store.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
@@ -14,9 +18,17 @@ import { StoreResponseDto } from './dto/store-response.dto';
 
 @Injectable()
 export class StoresService {
+  private readonly logger = new Logger(StoresService.name);
+
   constructor(
     @InjectRepository(Store)
     private readonly storeRepository: Repository<Store>,
+    @InjectRepository(Product)
+    private readonly productRepository: Repository<Product>,
+    @InjectRepository(Order)
+    private readonly orderRepository: Repository<Order>,
+    @InjectRepository(Route)
+    private readonly routeRepository: Repository<Route>,
   ) {}
 
   async create(createStoreDto: CreateStoreDto): Promise<StoreResponseDto> {
@@ -130,10 +142,18 @@ export class StoresService {
       updateData.token = null;
     }
 
+    const isActiveChanged = updateStoreDto.isActive !== undefined && updateStoreDto.isActive !== store.isActive;
+    const newIsActive = updateStoreDto.isActive !== undefined ? updateStoreDto.isActive : store.isActive;
+
     Object.assign(store, updateData);
     
     try {
       const updatedStore = await this.storeRepository.save(store);
+
+      if (isActiveChanged) {
+        await this.updateRelatedEntitiesActiveStatus(id, newIsActive);
+      }
+
       return StoreResponseDto.fromEntity(updatedStore);
     } catch (error) {
       if (error instanceof QueryFailedError && (error as any).code === 'ER_DUP_ENTRY') {
@@ -146,6 +166,59 @@ export class StoresService {
         }
         throw new ConflictException('Bu mağaza bilgileri zaten kullanılıyor');
       }
+      throw error;
+    }
+  }
+
+  private async updateRelatedEntitiesActiveStatus(storeId: string, isActive: boolean): Promise<void> {
+    try {
+      const [productsResult, ordersResult] = await Promise.all([
+        this.productRepository.update(
+          { storeId },
+          { isActive },
+        ),
+        this.orderRepository.update(
+          { storeId },
+          { isActive },
+        ),
+      ]);
+
+      const storeOrders = await this.orderRepository.find({
+        where: { storeId },
+        select: ['id'],
+      });
+
+      const orderIds = storeOrders.map((o) => o.id);
+
+      if (orderIds.length > 0) {
+        const routesWithStoreOrders = await this.routeRepository
+          .createQueryBuilder('route')
+          .innerJoin('route.orders', 'order')
+          .where('order.id IN (:...orderIds)', { orderIds })
+          .andWhere('route.status IN (:...statuses)', {
+            statuses: [RouteStatus.COLLECTING, RouteStatus.COMPLETED],
+          })
+          .getMany();
+
+        const routeIds = routesWithStoreOrders.map((r) => r.id);
+
+        if (routeIds.length > 0) {
+          await this.routeRepository.update(
+            { id: In(routeIds) },
+            { isActive },
+          );
+        }
+      }
+
+      this.logger.log(
+        `Updated related entities for store ${storeId}: isActive = ${isActive}. ` +
+        `Products: ${productsResult.affected}, Orders: ${ordersResult.affected}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Error updating related entities for store ${storeId}: ${error.message}`,
+        error.stack,
+      );
       throw error;
     }
   }

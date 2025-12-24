@@ -128,7 +128,9 @@ export class RoutesService {
           OrderStatus.DELIVERED,
           OrderStatus.CANCELLED,
         ],
-      });
+      })
+      .andWhere('order.isActive = :isActive', { isActive: true })
+      .andWhere('store.isActive = :storeIsActive', { storeIsActive: true });
 
     if (filter.storeId && filter.storeId !== 'undefined' && filter.storeId !== 'null') {
       queryBuilder.andWhere('store.id = :storeId', { storeId: filter.storeId });
@@ -151,7 +153,10 @@ export class RoutesService {
 
       if (allBarcodes.size > 0) {
         const products = await this.productRepository.find({
-          where: { barcode: In(Array.from(allBarcodes)) },
+          where: { 
+            barcode: In(Array.from(allBarcodes)),
+            isActive: true,
+          },
           select: ['barcode', 'brand'],
         });
 
@@ -368,7 +373,9 @@ export class RoutesService {
     const queryBuilder = this.orderRepository
       .createQueryBuilder('order')
       .leftJoinAndSelect('order.store', 'store')
-      .where('order.status NOT IN (:...excludedStatuses)', { excludedStatuses });
+      .where('order.status NOT IN (:...excludedStatuses)', { excludedStatuses })
+      .andWhere('order.isActive = :isActive', { isActive: true })
+      .andWhere('store.isActive = :storeIsActive', { storeIsActive: true });
 
     if (storeId) {
       queryBuilder.andWhere('order.storeId = :storeId', { storeId });
@@ -482,7 +489,10 @@ export class RoutesService {
       const productsByBarcode = new Map<string, Product>();
       if (allBarcodes.size > 0) {
         const products = await this.productRepository.find({
-          where: { barcode: In(Array.from(allBarcodes)) },
+          where: { 
+            barcode: In(Array.from(allBarcodes)),
+            isActive: true,
+          },
         });
         for (const product of products) {
           if (product.barcode) {

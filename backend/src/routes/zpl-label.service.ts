@@ -67,12 +67,12 @@ export class ZplLabelService {
                 <table style="border-collapse: collapse;border-spacing: 0px;">
                   <tbody>
                     <tr>
-                      <td colspan="2" style="height: 20mm; text-align: center;">
+                      <td colspan="4" style="height: 20mm; text-align: center; width: 100%;">
                         <svg class="barcode_${index}"></svg>
                       </td>
                     </tr>
                     <tr>
-                      <td colspan="2" style="width: 100%;height: 20mm; border-top: 1px solid; vertical-align: top; font-size: 12px;">
+                      <td colspan="4" style="width: 100%;height: 20mm; border-top: 1px solid; vertical-align: top; font-size: 12px; text-align: center;">
                         <b>ALICI:<br>
                         ${receiverName} / <br>
                         ${receiverAddress}

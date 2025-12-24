@@ -123,6 +123,7 @@ export class OrdersService {
               micro: trendyolOrder.micro || false,
               deliveryAddressType: trendyolOrder.deliveryAddressType,
               lastModifiedDate: trendyolOrder.lastModifiedDate,
+              agreedDeliveryDate: trendyolOrder.agreedDeliveryDate || null,
               isActive: store.isActive,
             };
 
@@ -187,6 +188,7 @@ export class OrdersService {
     status?: OrderStatus,
     excludeStatuses?: OrderStatus[],
     search?: string,
+    overdue?: boolean,
   ): Promise<PaginationResponse<OrderResponseDto>> {
     const { page, limit, sortBy, sortOrder } = paginationDto;
     const skip = (page - 1) * limit;
@@ -202,19 +204,11 @@ export class OrdersService {
     }
 
     if (storeId) {
-      if (excludeStatuses && excludeStatuses.length > 0) {
-        queryBuilder.andWhere('order.storeId = :storeId', { storeId });
-      } else {
-        queryBuilder.andWhere('order.storeId = :storeId', { storeId });
-      }
+      queryBuilder.andWhere('order.storeId = :storeId', { storeId });
     }
 
     if (status) {
-      if (storeId || (excludeStatuses && excludeStatuses.length > 0)) {
-        queryBuilder.andWhere('order.status = :status', { status });
-      } else {
-        queryBuilder.andWhere('order.status = :status', { status });
-      }
+      queryBuilder.andWhere('order.status = :status', { status });
     }
 
     if (search && search.trim()) {
@@ -223,6 +217,23 @@ export class OrdersService {
         '(LOWER(order.orderNumber) LIKE :search OR LOWER(order.customerFirstName) LIKE :search OR LOWER(order.customerLastName) LIKE :search OR LOWER(order.customerEmail) LIKE :search)',
         { search: searchTerm },
       );
+    }
+
+    if (overdue) {
+      // Gecikmiş kargo: agreedDeliveryDate bugünden küçük ve status SHIPPED, DELIVERED, CANCELLED değil
+      // agreedDeliveryDate GMT+3 formatında timestamp olarak gelir
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      // GMT+3'e göre bugünün başlangıcı timestamp'i
+      const todayStartUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0));
+      const todayStartGMT3 = todayStartUTC.getTime() + (3 * 60 * 60 * 1000);
+
+      queryBuilder
+        .andWhere('order.agreedDeliveryDate IS NOT NULL')
+        .andWhere('order.agreedDeliveryDate < :todayStart', { todayStart: todayStartGMT3 })
+        .andWhere('order.status NOT IN (:...excludedStatuses)', {
+          excludedStatuses: [OrderStatus.SHIPPED, OrderStatus.DELIVERED, OrderStatus.CANCELLED],
+        });
     }
 
     if (sortBy) {
@@ -416,6 +427,7 @@ export class OrdersService {
           micro: trendyolOrder.micro || false,
           deliveryAddressType: trendyolOrder.deliveryAddressType,
           lastModifiedDate: trendyolOrder.lastModifiedDate,
+          agreedDeliveryDate: trendyolOrder.agreedDeliveryDate || null,
           isActive: store.isActive,
         };
 
@@ -484,6 +496,7 @@ export class OrdersService {
           micro: trendyolOrder.micro || false,
           deliveryAddressType: trendyolOrder.deliveryAddressType,
           lastModifiedDate: trendyolOrder.lastModifiedDate,
+          agreedDeliveryDate: trendyolOrder.agreedDeliveryDate || null,
           isActive: store.isActive,
         };
 
@@ -606,6 +619,7 @@ export class OrdersService {
           micro: trendyolOrder.micro || false,
           deliveryAddressType: trendyolOrder.deliveryAddressType,
           lastModifiedDate: trendyolOrder.lastModifiedDate,
+          agreedDeliveryDate: trendyolOrder.agreedDeliveryDate || null,
           isActive: store.isActive,
         };
 

@@ -51,6 +51,13 @@ export const routes: RouteConfig[] = [
         showInSidebar: true,
       },
       {
+        path: '/reports',
+        label: 'Raporlar',
+        icon: 'reports',
+        roles: [Role.PLATFORM_OWNER],
+        showInSidebar: true,
+      },
+      {
         path: '/users',
     label: 'Kullanıcılar',
     icon: 'users',

@@ -12,6 +12,7 @@ import { RoutesModule } from './routes/routes.module';
 import { ClaimsModule } from './claims/claims.module';
 import { QuestionsModule } from './questions/questions.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { ReportsModule } from './reports/reports.module';
 import { SeedService } from './database/seed.service';
 import { User } from './users/entities/user.entity';
 
@@ -48,6 +49,7 @@ import { User } from './users/entities/user.entity';
     ClaimsModule,
     QuestionsModule,
     DashboardModule,
+    ReportsModule,
   ],
   providers: [SeedService],
 })

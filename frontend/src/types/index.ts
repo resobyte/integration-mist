@@ -90,6 +90,7 @@ export interface Order {
   customerLastName: string | null;
   customerEmail: string | null;
   orderDate: number;
+  agreedDeliveryDate: number | null;
   grossAmount: number;
   totalPrice: number;
   currencyCode: string;

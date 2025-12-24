@@ -42,6 +42,10 @@ interface TrendyolOrder {
   micro: boolean;
   deliveryAddressType?: string;
   lastModifiedDate?: number;
+  agreedDeliveryDate?: number;
+  estimatedDeliveryStartDate?: number;
+  estimatedDeliveryEndDate?: number;
+  originShipmentDate?: number;
 }
 
 @Injectable()

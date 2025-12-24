@@ -15,6 +15,7 @@ export class OrderResponseDto {
   customerLastName: string | null;
   customerEmail: string | null;
   orderDate: number;
+  agreedDeliveryDate: number | null;
   grossAmount: number;
   totalPrice: number;
   currencyCode: string;
@@ -46,6 +47,7 @@ export class OrderResponseDto {
     dto.customerLastName = order.customerLastName;
     dto.customerEmail = order.customerEmail;
     dto.orderDate = order.orderDate;
+    dto.agreedDeliveryDate = order.agreedDeliveryDate;
     dto.grossAmount = Number(order.grossAmount);
     dto.totalPrice = Number(order.totalPrice);
     dto.currencyCode = order.currencyCode;

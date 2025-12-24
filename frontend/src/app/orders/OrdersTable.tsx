@@ -48,7 +48,9 @@ export function OrdersTable() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStoreId, setSelectedStoreId] = useState<string>('');
   const [selectedStatus, setSelectedStatus] = useState<OrderStatus | ''>(OrderStatus.PENDING);
+  const [showOverdueOnly, setShowOverdueOnly] = useState<boolean>(false);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [currentTime, setCurrentTime] = useState<number>(Date.now());
   const [showSkippedModal, setShowSkippedModal] = useState(false);
   const [fetchResults, setFetchResults] = useState<FetchResult[]>([]);
   const [pageSize, setPageSize] = useState(10);
@@ -90,6 +92,10 @@ export function OrdersTable() {
         params.search = searchTerm.trim();
       }
 
+      if (showOverdueOnly) {
+        params.overdue = 'true';
+      }
+
       const response = await apiGetPaginated<Order>('/orders', {
         params,
       });
@@ -100,15 +106,24 @@ export function OrdersTable() {
     } finally {
       setIsLoading(false);
     }
-  }, [currentPage, sortConfig.sortBy, sortConfig.sortOrder, selectedStoreId, selectedStatus, pageSize, searchTerm]);
+  }, [currentPage, sortConfig.sortBy, sortConfig.sortOrder, selectedStoreId, selectedStatus, pageSize, searchTerm, showOverdueOnly]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedStoreId, selectedStatus, searchTerm]);
+  }, [selectedStoreId, selectedStatus, searchTerm, showOverdueOnly]);
 
   useEffect(() => {
     fetchOrders();
   }, [fetchOrders]);
+
+  // Geri sayım için her dakika güncelle
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 60000); // Her dakika güncelle
+
+    return () => clearInterval(interval);
+  }, []);
 
   const handleFetchOrders = async (storeId: string) => {
     setIsFetching(true);
@@ -266,6 +281,7 @@ export function OrdersTable() {
     { key: 'expand', label: '' },
     { key: 'orderNumber', label: 'Sipariş No' },
     { key: 'orderDate', label: 'Sipariş Tarihi' },
+    { key: 'agreedDeliveryDate', label: 'Kargoya Verme Tarihi' },
     { key: 'customerFirstName', label: 'Müşteri' },
     { key: 'totalPrice', label: 'Tutar' },
     { key: 'status', label: 'Durum' },
@@ -420,6 +436,17 @@ export function OrdersTable() {
               <option value={OrderStatus.RETURNED}>İade Edildi</option>
             </select>
           </div>
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showOverdueOnly}
+                onChange={(e) => setShowOverdueOnly(e.target.checked)}
+                className="w-4 h-4 rounded border-input text-primary focus:ring-2 focus:ring-primary focus:ring-offset-2 cursor-pointer"
+              />
+              <span className="text-sm text-foreground font-medium">Gecikmiş Kargo</span>
+            </label>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -467,11 +494,26 @@ export function OrdersTable() {
                   const isExpanded = expandedRows.has(order.id);
                   const hasLines = order.lines && Array.isArray(order.lines) && order.lines.length > 0;
 
+                  // Kargoya verme tarihi geçti mi kontrolü
+                  const isDeliveryDatePassed = (() => {
+                    if (!order.agreedDeliveryDate || isNaN(Number(order.agreedDeliveryDate))) {
+                      return false;
+                    }
+                    const gmt3Timestamp = Number(order.agreedDeliveryDate);
+                    const utcTimestamp = gmt3Timestamp - (3 * 60 * 60 * 1000);
+                    const deliveryDate = new Date(utcTimestamp);
+                    const now = new Date();
+                    // Sadece tarih karşılaştırması (saat bilgisi olmadan)
+                    deliveryDate.setHours(0, 0, 0, 0);
+                    now.setHours(0, 0, 0, 0);
+                    return deliveryDate < now && order.status !== OrderStatus.SHIPPED && order.status !== OrderStatus.DELIVERED && order.status !== OrderStatus.CANCELLED;
+                  })();
+
                   return (
                     <>
                       <tr
                         key={order.id}
-                        className={`hover:bg-muted/20 transition-colors group cursor-pointer ${isExpanded ? 'bg-muted/10' : ''}`}
+                        className={`hover:bg-muted/20 transition-colors group cursor-pointer ${isExpanded ? 'bg-muted/10' : ''} ${isDeliveryDatePassed ? 'bg-[rgba(128,0,32,0.1)]' : ''}`}
                         onClick={() => toggleRowExpansion(order.id)}
                       >
                         <td className="px-3 py-4">
@@ -498,13 +540,56 @@ export function OrdersTable() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
                           {order.orderDate && !isNaN(Number(order.orderDate)) ? (
-                            new Date(Number(order.orderDate)).toLocaleDateString('tr-TR', {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })
+                            (() => {
+                              // orderDate GMT+3 formatında timestamp (milliseconds) olarak gelir
+                              // JavaScript Date UTC olarak yorumlar, GMT+3 offset'ini (3 saat = 10800000 ms) çıkarıyoruz
+                              const gmt3Timestamp = Number(order.orderDate);
+                              const utcTimestamp = gmt3Timestamp - (3 * 60 * 60 * 1000);
+                              const date = new Date(utcTimestamp);
+                              return date.toLocaleDateString('tr-TR', {
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                timeZone: 'Europe/Istanbul',
+                              });
+                            })()
+                          ) : (
+                            '-'
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          {order.agreedDeliveryDate && !isNaN(Number(order.agreedDeliveryDate)) ? (
+                            (() => {
+                              // agreedDeliveryDate GMT+3 formatında timestamp (milliseconds) olarak gelir
+                              const gmt3Timestamp = Number(order.agreedDeliveryDate);
+                              const utcTimestamp = gmt3Timestamp - (3 * 60 * 60 * 1000);
+                              const deliveryDate = new Date(utcTimestamp);
+                              const now = new Date(currentTime);
+                              const diff = deliveryDate.getTime() - now.getTime();
+
+                              if (diff < 0) {
+                                // Tarih geçmiş
+                                return (
+                                  <span className="text-red-600 font-medium">Geciken kargo</span>
+                                );
+                              } else {
+                                // Geri sayım
+                                const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+                                const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                                
+                                const parts = [];
+                                if (days > 0) parts.push(`${String(days).padStart(2, '0')} gün`);
+                                if (hours > 0 || days > 0) parts.push(`${String(hours).padStart(2, '0')} saat`);
+                                parts.push(`${String(minutes).padStart(2, '0')} dakika`);
+                                
+                                return (
+                                  <span className="text-muted-foreground">{parts.join(' ')}</span>
+                                );
+                              }
+                            })()
                           ) : (
                             '-'
                           )}

@@ -48,12 +48,12 @@ export class OrdersController {
   @HttpCode(HttpStatus.OK)
   async syncAllStoresCreatedOrders() {
     const result = await this.ordersService.syncAllStoresCreatedOrders();
-    const totalInitialSync = result.results.filter((r) => r.initialSync).length;
-    const totalInitialSaved = result.results.reduce((sum, r) => sum + r.initialSyncSaved, 0);
-    const totalNew = result.results.reduce((sum, r) => sum + r.newOrdersAdded, 0);
-    const totalUpdated = result.results.reduce((sum, r) => sum + r.ordersUpdated, 0);
-    const totalSkipped = result.results.reduce((sum, r) => sum + r.ordersSkipped, 0);
-    const totalErrors = result.results.reduce((sum, r) => sum + r.errors, 0);
+    const totalInitialSync = result.results.filter((r: any) => r.initialSync).length;
+    const totalInitialSaved = result.results.reduce((sum: number, r: any) => sum + r.initialSyncSaved, 0);
+    const totalNew = result.results.reduce((sum: number, r: any) => sum + r.newOrdersAdded, 0);
+    const totalUpdated = result.results.reduce((sum: number, r: any) => sum + r.ordersUpdated, 0);
+    const totalSkipped = result.results.reduce((sum: number, r: any) => sum + r.ordersSkipped, 0);
+    const totalErrors = result.results.reduce((sum: number, r: any) => sum + r.errors, 0);
     
     let message = '';
     if (totalInitialSync > 0) {
@@ -110,6 +110,7 @@ export class OrdersController {
     @Query('storeId') storeId?: string,
     @Query('status') status?: string,
     @Query('search') search?: string,
+    @Query('overdue') overdue?: string,
   ) {
     const paginationDto: PaginationDto = {
       page: page ? parseInt(page, 10) : 1,
@@ -120,7 +121,8 @@ export class OrdersController {
     const orderStatus = status && Object.values(OrderStatus).includes(status as OrderStatus) 
       ? (status as OrderStatus) 
       : undefined;
-    return this.ordersService.findAll(paginationDto, storeId, orderStatus, undefined, search);
+    const isOverdue = overdue === 'true';
+    return this.ordersService.findAll(paginationDto, storeId, orderStatus, undefined, search, isOverdue);
   }
 
   @Get('count')

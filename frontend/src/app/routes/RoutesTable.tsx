@@ -393,13 +393,21 @@ export function RoutesTable() {
 
       const html = await response.text();
       
-      const printWindow = window.open('', '_blank');
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      
+      const printWindow = window.open(url, '_blank');
+      
       if (printWindow) {
-        printWindow.document.write(html);
-        printWindow.document.close();
+        printWindow.onload = () => {
+          URL.revokeObjectURL(url);
+        };
+      } else {
+        URL.revokeObjectURL(url);
+        throw new Error('Popup engelleyici aktif. Lütfen popup engelleyiciyi kapatıp tekrar deneyin.');
       }
 
-      showSuccess('Etiket başarıyla indirildi');
+      showSuccess('Etiket başarıyla açıldı');
       fetchRoutes();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Etiket yazdırma sırasında hata oluştu';
@@ -598,15 +606,19 @@ export function RoutesTable() {
                           </svg>
                           Detay
                         </button>
-                        {route.status !== RouteStatus.COMPLETED && route.status !== RouteStatus.CANCELLED && (
+                        {route.status !== RouteStatus.CANCELLED && (
                           <button
                             onClick={() => handlePrintLabel(route.id)}
-                            className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center transition-colors group"
+                            className={`text-sm font-medium flex items-center transition-colors group ${
+                              route.status === RouteStatus.COMPLETED
+                                ? 'text-orange-600 hover:text-orange-700'
+                                : 'text-blue-600 hover:text-blue-700'
+                            }`}
                           >
                             <svg className="w-4 h-4 mr-1.5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                             </svg>
-                            Etiket Yazdır
+                            {route.status === RouteStatus.COMPLETED ? 'Etiketi Yeniden Yazdır' : 'Etiket Yazdır'}
                           </button>
                         )}
                         {route.status !== RouteStatus.COMPLETED && route.status !== RouteStatus.CANCELLED && (

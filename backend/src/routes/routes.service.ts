@@ -249,61 +249,65 @@ export class RoutesService {
       throw new NotFoundException('Route not found');
     }
 
-    if (route.status === RouteStatus.COMPLETED) {
-      throw new BadRequestException('Route already completed');
-    }
+    const isRePrint = route.status === RouteStatus.COMPLETED;
 
     const zpl = await this.zplLabelService.generateZpl(route);
 
-    await this.routeRepository.update(routeId, {
-      status: RouteStatus.COMPLETED,
-      labelPrintedAt: new Date().toISOString(),
-    });
-
-    for (const order of route.orders) {
-      await this.orderRepository.update(order.id, {
-        status: OrderStatus.PACKED,
+    if (isRePrint) {
+      await this.routeRepository.update(routeId, {
+        labelPrintedAt: new Date().toISOString(),
+      });
+    } else {
+      await this.routeRepository.update(routeId, {
+        status: RouteStatus.COMPLETED,
+        labelPrintedAt: new Date().toISOString(),
       });
 
-      // Trendyol'a Picking status'ü gönderme kısmı yorum satırına alındı
-      /*
-      if (order.store?.sellerId && order.store?.apiKey && order.store?.apiSecret) {
-        try {
-          const lines = order.lines as Array<Record<string, unknown>> | null;
-          
-          if (lines && lines.length > 0) {
-            const packageLines = lines
-              .map((line) => {
-                const lineId = line.id || line.lineId || line.orderLineId;
-                const quantity = line.quantity || 1;
-                
-                if (lineId && typeof lineId === 'number' && lineId > 0) {
-                  return {
-                    lineId: lineId as number,
-                    quantity: typeof quantity === 'number' ? quantity : parseInt(String(quantity), 10) || 1,
-                  };
-                }
-                return null;
-              })
-              .filter((line): line is { lineId: number; quantity: number } => line !== null);
+      for (const order of route.orders) {
+        await this.orderRepository.update(order.id, {
+          status: OrderStatus.PACKED,
+        });
 
-            if (packageLines.length > 0) {
-              await this.trendyolApiService.updatePackage(
-                order.store.sellerId,
-                order.store.apiKey,
-                order.store.apiSecret,
-                order.shipmentPackageId,
-                packageLines,
-              );
+        // Trendyol'a Picking status'ü gönderme kısmı yorum satırına alındı
+        /*
+        if (order.store?.sellerId && order.store?.apiKey && order.store?.apiSecret) {
+          try {
+            const lines = order.lines as Array<Record<string, unknown>> | null;
+            
+            if (lines && lines.length > 0) {
+              const packageLines = lines
+                .map((line) => {
+                  const lineId = line.id || line.lineId || line.orderLineId;
+                  const quantity = line.quantity || 1;
+                  
+                  if (lineId && typeof lineId === 'number' && lineId > 0) {
+                    return {
+                      lineId: lineId as number,
+                      quantity: typeof quantity === 'number' ? quantity : parseInt(String(quantity), 10) || 1,
+                    };
+                  }
+                  return null;
+                })
+                .filter((line): line is { lineId: number; quantity: number } => line !== null);
+
+              if (packageLines.length > 0) {
+                await this.trendyolApiService.updatePackage(
+                  order.store.sellerId,
+                  order.store.apiKey,
+                  order.store.apiSecret,
+                  order.shipmentPackageId,
+                  packageLines,
+                );
+              }
             }
+          } catch (error) {
+            this.logger.error(`Failed to update Trendyol package status for order ${order.orderNumber}: ${error.message}`, error.stack);
           }
-        } catch (error) {
-          this.logger.error(`Failed to update Trendyol package status for order ${order.orderNumber}: ${error.message}`, error.stack);
+        } else {
+          this.logger.warn(`Store credentials missing for order ${order.orderNumber}, skipping Trendyol update`);
         }
-      } else {
-        this.logger.warn(`Store credentials missing for order ${order.orderNumber}, skipping Trendyol update`);
+        */
       }
-      */
     }
 
     const updatedRoute = await this.routeRepository.findOne({

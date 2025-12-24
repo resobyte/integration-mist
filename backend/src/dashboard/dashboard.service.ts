@@ -20,6 +20,8 @@ export interface DashboardStats {
   completedRoutes: number;
   waitingClaims: number;
   waitingQuestions: number;
+  totalOrders: number;
+  totalRevenue: number;
 }
 
 @Injectable()
@@ -64,16 +66,54 @@ export class DashboardService implements OnModuleInit {
       packedOrders,
       waitingRoutes,
       completedRoutes,
+      totalOrdersResult,
+      totalRevenueResult,
     ] = await Promise.all([
       this.storeRepository.count({ where: { isActive: true } }),
       this.productRepository.count({ where: { isActive: true } }),
-      this.orderRepository.count({ where: { status: OrderStatus.PENDING } }),
-      this.orderRepository.count({ where: { status: OrderStatus.PACKED } }),
-      this.routeRepository.count({
-        where: { status: In([RouteStatus.COLLECTING, RouteStatus.READY]) },
+      this.orderRepository.count({ 
+        where: { 
+          status: OrderStatus.PENDING,
+          isActive: true,
+        },
       }),
-      this.routeRepository.count({ where: { status: RouteStatus.COMPLETED } }),
+      this.orderRepository.count({ 
+        where: { 
+          status: OrderStatus.PACKED,
+          isActive: true,
+        },
+      }),
+      this.routeRepository.count({
+        where: { 
+          status: In([RouteStatus.COLLECTING, RouteStatus.READY]),
+          isActive: true,
+        },
+      }),
+      this.routeRepository.count({ 
+        where: { 
+          status: RouteStatus.COMPLETED,
+          isActive: true,
+        },
+      }),
+      this.orderRepository
+        .createQueryBuilder('order')
+        .leftJoin('order.store', 'store')
+        .where('order.status != :cancelledStatus', { cancelledStatus: OrderStatus.CANCELLED })
+        .andWhere('order.isActive = :isActive', { isActive: true })
+        .andWhere('store.isActive = :storeIsActive', { storeIsActive: true })
+        .getCount(),
+      this.orderRepository
+        .createQueryBuilder('order')
+        .leftJoin('order.store', 'store')
+        .select('SUM(order.totalPrice)', 'total')
+        .where('order.status != :cancelledStatus', { cancelledStatus: OrderStatus.CANCELLED })
+        .andWhere('order.isActive = :isActive', { isActive: true })
+        .andWhere('store.isActive = :storeIsActive', { storeIsActive: true })
+        .getRawOne(),
     ]);
+
+    const totalOrders = totalOrdersResult || 0;
+    const totalRevenue = totalRevenueResult?.total ? parseFloat(totalRevenueResult.total) : 0;
 
     return {
       totalStores,
@@ -82,6 +122,8 @@ export class DashboardService implements OnModuleInit {
       packedOrders,
       waitingRoutes,
       completedRoutes,
+      totalOrders,
+      totalRevenue,
     };
   }
 

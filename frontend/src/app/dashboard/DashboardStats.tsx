@@ -11,6 +11,8 @@ interface DashboardInternalStats {
   packedOrders: number;
   waitingRoutes: number;
   completedRoutes: number;
+  totalOrders: number;
+  totalRevenue: number;
 }
 
 interface DashboardExternalStats {
@@ -54,7 +56,7 @@ export function DashboardStats() {
   if (isLoadingInternal && !internalStats) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {[...Array(8)].map((_, i) => (
+        {[...Array(10)].map((_, i) => (
           <div key={i} className="bg-card p-6 rounded-xl border border-border shadow-sm animate-pulse">
             <div className="h-4 bg-muted rounded w-24 mb-2"></div>
             <div className="h-8 bg-muted rounded w-16"></div>
@@ -67,6 +69,24 @@ export function DashboardStats() {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
       <InfoCard
+        title="Toplam Ciro"
+        value={internalStats?.totalRevenue ? `${internalStats.totalRevenue.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺` : '0,00 ₺'}
+        icon={
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        }
+      />
+      <InfoCard
+        title="Toplam Satış Adedi"
+        value={internalStats?.totalOrders ?? 0}
+        icon={
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+          </svg>
+        }
+      />
+      <InfoCard
         title="Toplam Mağaza Sayısı"
         value={internalStats?.totalStores ?? 0}
         icon={
@@ -76,7 +96,7 @@ export function DashboardStats() {
         }
       />
       <InfoCard
-        title="Toplam Ürün Sayısı"
+        title="Toplam Ürün"
         value={internalStats?.totalProducts ?? 0}
         icon={
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -85,7 +105,7 @@ export function DashboardStats() {
         }
       />
       <InfoCard
-        title="Paketlenmeyi Bekleyen Sipariş"
+        title="Paketlenmeyi Bekleyen"
         value={internalStats?.pendingOrders ?? 0}
         icon={
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -94,16 +114,7 @@ export function DashboardStats() {
         }
       />
       <InfoCard
-        title="Paketlenen Toplam Sipariş"
-        value={internalStats?.packedOrders ?? 0}
-        icon={
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-          </svg>
-        }
-      />
-      <InfoCard
-        title="Toplamada Bekleyen Rota"
+        title="Toplamada Rota"
         value={internalStats?.waitingRoutes ?? 0}
         icon={
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -112,7 +123,16 @@ export function DashboardStats() {
         }
       />
       <InfoCard
-        title="Tamamlanan Toplam Rota"
+        title="Paketlenen"
+        value={internalStats?.packedOrders ?? 0}
+        icon={
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+        }
+      />
+      <InfoCard
+        title="Tamamlanan Rota"
         value={internalStats?.completedRoutes ?? 0}
         icon={
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -121,7 +141,7 @@ export function DashboardStats() {
         }
       />
       <InfoCard
-        title="İade Bekleyen Sipariş"
+        title="İade Bekleyen"
         value={isLoadingExternal ? '...' : (externalStats?.waitingClaims ?? 0)}
         icon={
           <svg className={`w-5 h-5 ${isLoadingExternal ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -130,7 +150,7 @@ export function DashboardStats() {
         }
       />
       <InfoCard
-        title="Soru Bekleyen Sipariş"
+        title="Soru Bekleyen"
         value={isLoadingExternal ? '...' : (externalStats?.waitingQuestions ?? 0)}
         icon={
           <svg className={`w-5 h-5 ${isLoadingExternal ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">

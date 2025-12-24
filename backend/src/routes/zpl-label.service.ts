@@ -49,10 +49,6 @@ export class ZplLabelService {
     const formattedDate = this.formatDate(orderDate);
     
     const cargoProvider = order.cargoProviderName || 'Kargo';
-    const storeName = order.store?.name || 'Trendyol';
-
-    const sender = this.getSenderInfo(order.store);
-    const senderFullAddress = this.formatSenderAddress(sender);
 
     const productRows = this.generateProductRows(order);
 
@@ -71,21 +67,16 @@ export class ZplLabelService {
                 <table style="border-collapse: collapse;border-spacing: 0px;">
                   <tbody>
                     <tr>
-                      <td colspan="5" style="height: 20mm; text-align: center;">
+                      <td colspan="2" style="height: 20mm; text-align: center;">
                         <svg class="barcode_${index}"></svg>
                       </td>
                     </tr>
                     <tr>
-                      <td colspan="2" style="width: 55%;height: 20mm; border-top: 1px solid; border-right: 1px solid; vertical-align: top; font-size: 12px;">
+                      <td colspan="2" style="width: 100%;height: 20mm; border-top: 1px solid; vertical-align: top; font-size: 12px;">
                         <b>ALICI:<br>
                         ${receiverName} / <br>
                         ${receiverAddress}
                         </b>
-                      </td>
-                      <td colspan="3" style="width: 45%;height: 20mm; border-top: 1px solid; vertical-align: top; font-size: 10px;">
-                        <b>GÖNDEREN:</b><br>
-                        ${sender.name}<br>
-                        ${senderFullAddress}${sender.phone ? `<br>Tel: ${sender.phone}` : ''}
                       </td>
                     </tr>
                     <tr>
@@ -99,10 +90,6 @@ export class ZplLabelService {
                       <td style="border-top: 1px solid; border-right: 1px solid; vertical-align: top;">
                         <b>SİPARİŞ NO:</b><br>
                         ${order.orderNumber}
-                      </td>
-                      <td style="border-top: 1px solid; border-right: 1px solid; vertical-align: top;">
-                        <b>KAYNAK</b><br>
-                        ${storeName}
                       </td>
                       <td style="border-top: 1px solid; vertical-align: top;">
                         <b>TAŞIYICI</b><br>
@@ -124,7 +111,6 @@ export class ZplLabelService {
                   <tbody>
                     <tr>
                       <td style="font-weight:bold;border-right:1px solid;border-bottom:1px solid;">Sıra No</td>
-                      <td style="font-weight:bold;border-right:1px solid;border-bottom:1px solid;">Malzeme/Hizmet Kodu</td>
                       <td style="font-weight:bold;border-right:1px solid;border-bottom:1px solid;">Malzeme/Hizmet Açıklaması</td>
                       <td style="font-weight:bold;border-bottom:1px solid;">Miktar</td>
                     </tr>
@@ -147,14 +133,12 @@ export class ZplLabelService {
     }
 
     return order.lines.map((line: any, idx: number) => {
-      const barcode = line.barcode || line.productBarcode || '-';
       const productName = line.productName || line.name || 'Ürün';
       const quantity = line.quantity || 1;
 
       return `
         <tr>
           <td style="width:7mm;border-right:1px solid;border-bottom:1px solid;">${idx + 1}</td>
-          <td style="width:30mm;border-right:1px solid;border-bottom:1px solid;">${barcode}</td>
           <td style="font-size:8px;border-right:1px solid;border-bottom:1px solid;">
             ${productName}
           </td>

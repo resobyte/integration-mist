@@ -186,6 +186,7 @@ export class OrdersService {
     storeId?: string,
     status?: OrderStatus,
     excludeStatuses?: OrderStatus[],
+    search?: string,
   ): Promise<PaginationResponse<OrderResponseDto>> {
     const { page, limit, sortBy, sortOrder } = paginationDto;
     const skip = (page - 1) * limit;
@@ -214,6 +215,14 @@ export class OrdersService {
       } else {
         queryBuilder.andWhere('order.status = :status', { status });
       }
+    }
+
+    if (search && search.trim()) {
+      const searchTerm = `%${search.trim().toLowerCase()}%`;
+      queryBuilder.andWhere(
+        '(LOWER(order.orderNumber) LIKE :search OR LOWER(order.customerFirstName) LIKE :search OR LOWER(order.customerLastName) LIKE :search OR LOWER(order.customerEmail) LIKE :search)',
+        { search: searchTerm },
+      );
     }
 
     if (sortBy) {

@@ -86,6 +86,10 @@ export function OrdersTable() {
         params.status = selectedStatus;
       }
 
+      if (searchTerm && searchTerm.trim()) {
+        params.search = searchTerm.trim();
+      }
+
       const response = await apiGetPaginated<Order>('/orders', {
         params,
       });
@@ -96,11 +100,11 @@ export function OrdersTable() {
     } finally {
       setIsLoading(false);
     }
-  }, [currentPage, sortConfig.sortBy, sortConfig.sortOrder, selectedStoreId, selectedStatus, pageSize]);
+  }, [currentPage, sortConfig.sortBy, sortConfig.sortOrder, selectedStoreId, selectedStatus, pageSize, searchTerm]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedStoreId, selectedStatus]);
+  }, [selectedStoreId, selectedStatus, searchTerm]);
 
   useEffect(() => {
     fetchOrders();
@@ -268,15 +272,7 @@ export function OrdersTable() {
     { key: 'trendyolStatus', label: 'Trendyol Durumu' },
   ];
 
-  const filteredOrders = searchTerm
-    ? orders.filter(
-        (order) =>
-          order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (order.customerFirstName && order.customerFirstName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-          (order.customerLastName && order.customerLastName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-          (order.customerEmail && order.customerEmail.toLowerCase().includes(searchTerm.toLowerCase())),
-      )
-    : orders;
+  const filteredOrders = orders;
 
   const renderOrderLines = (order: Order) => {
     const lines = order.lines as OrderLine[] | null;

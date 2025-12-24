@@ -109,6 +109,7 @@ export class OrdersController {
     @Query('sortOrder') sortOrder?: 'ASC' | 'DESC',
     @Query('storeId') storeId?: string,
     @Query('status') status?: string,
+    @Query('search') search?: string,
   ) {
     const paginationDto: PaginationDto = {
       page: page ? parseInt(page, 10) : 1,
@@ -119,7 +120,7 @@ export class OrdersController {
     const orderStatus = status && Object.values(OrderStatus).includes(status as OrderStatus) 
       ? (status as OrderStatus) 
       : undefined;
-    return this.ordersService.findAll(paginationDto, storeId, orderStatus);
+    return this.ordersService.findAll(paginationDto, storeId, orderStatus, undefined, search);
   }
 
   @Get('count')

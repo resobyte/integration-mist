@@ -33,6 +33,17 @@ export class OrdersController {
     };
   }
 
+  @Post('fetch-all-statuses/:storeId')
+  @HttpCode(HttpStatus.OK)
+  async fetchAllStatusesOrders(@Param('storeId') storeId: string) {
+    const result = await this.ordersService.fetchAndSaveOrders(storeId, true);
+    return {
+      success: true,
+      message: `All status orders fetched successfully. Saved: ${result.saved}, Updated: ${result.updated}, Errors: ${result.errors}`,
+      data: result,
+    };
+  }
+
   @Post('fetch-all')
   @HttpCode(HttpStatus.OK)
   async fetchAllOrders() {

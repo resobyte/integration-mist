@@ -1018,4 +1018,59 @@ export class OrdersService {
       results,
     };
   }
+
+  async fetchAllStoresOrdersAllStatuses(): Promise<{
+    totalStores: number;
+    results: Array<{
+      storeId: string;
+      storeName: string;
+      saved: number;
+      updated: number;
+      errors: number;
+      skipped: number;
+      skippedOrders: SkippedOrder[];
+      error?: string;
+    }>;
+  }> {
+    const storesResponse = await this.storesService.findAll(
+      { page: 1, limit: 1000, sortBy: 'createdAt', sortOrder: 'ASC' },
+    );
+
+    const stores = storesResponse.data.filter(
+      (store) => store.sellerId && store.apiKey && store.apiSecret && store.isActive,
+    );
+
+    const results = [];
+
+    for (const store of stores) {
+      try {
+        const result = await this.fetchAndSaveOrders(store.id, true);
+        results.push({
+          storeId: store.id,
+          storeName: store.name,
+          saved: result.saved,
+          updated: result.updated,
+          errors: result.errors,
+          skipped: result.skipped,
+          skippedOrders: result.skippedOrders,
+        });
+      } catch (error) {
+        results.push({
+          storeId: store.id,
+          storeName: store.name,
+          saved: 0,
+          updated: 0,
+          errors: 1,
+          skipped: 0,
+          skippedOrders: [],
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    }
+
+    return {
+      totalStores: stores.length,
+      results,
+    };
+  }
 }

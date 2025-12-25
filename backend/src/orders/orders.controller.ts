@@ -55,6 +55,17 @@ export class OrdersController {
     };
   }
 
+  @Post('fetch-all-statuses-all-stores')
+  @HttpCode(HttpStatus.OK)
+  async fetchAllStatusesAllStores() {
+    const result = await this.ordersService.fetchAllStoresOrdersAllStatuses();
+    return {
+      success: true,
+      message: `All status orders fetched for all stores. Total: ${result.totalStores} stores processed.`,
+      data: result,
+    };
+  }
+
   @Post('sync-created-all')
   @HttpCode(HttpStatus.OK)
   async syncAllStoresCreatedOrders() {

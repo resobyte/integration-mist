@@ -46,6 +46,7 @@ export function OrdersTable() {
   const [isFetching, setIsFetching] = useState(false);
   const [isFetchingAll, setIsFetchingAll] = useState(false);
   const [isFetchingAllStatuses, setIsFetchingAllStatuses] = useState(false);
+  const [isSyncingAll, setIsSyncingAll] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStoreId, setSelectedStoreId] = useState<string>('');
   const [selectedStatus, setSelectedStatus] = useState<OrderStatus | ''>(OrderStatus.PENDING);
@@ -161,6 +162,47 @@ export function OrdersTable() {
       showDanger(errorMessage);
     } finally {
       setIsFetching(false);
+    }
+  };
+
+  const handleSyncAllStores = async () => {
+    setIsSyncingAll(true);
+    try {
+      const response = await apiPost<{
+        totalStores: number;
+        results: Array<{
+          storeId: string;
+          storeName: string;
+          saved: number;
+          updated: number;
+          errors: number;
+          skipped: number;
+          skippedOrders: SkippedOrder[];
+          error?: string;
+        }>;
+      }>('/orders/fetch-all-statuses-all-stores', {});
+
+      const { results } = response.data;
+      const totalSaved = results.reduce((sum, r) => sum + r.saved, 0);
+      const totalUpdated = results.reduce((sum, r) => sum + r.updated, 0);
+      const totalErrors = results.reduce((sum, r) => sum + r.errors, 0);
+      const totalSkipped = results.reduce((sum, r) => sum + r.skipped, 0);
+
+      let message = `${response.data.totalStores} mağaza için tüm statüler çekildi: ${totalSaved} sipariş eklendi, ${totalUpdated} güncellendi`;
+      if (totalSkipped > 0) {
+        message += `, ${totalSkipped} atlandı (eksik ürün)`;
+      }
+      if (totalErrors > 0) {
+        message += `, ${totalErrors} hata`;
+      }
+
+      showSuccess(message);
+      fetchOrders();
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Eşitleme sırasında hata oluştu';
+      showDanger(errorMessage);
+    } finally {
+      setIsSyncingAll(false);
     }
   };
 
@@ -388,7 +430,7 @@ export function OrdersTable() {
           <button
             onClick={handleFetchAllOrders}
             disabled={isFetchingAll}
-            className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg flex items-center shadow-md transition-all active:scale-95 disabled:opacity-50"
+            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center shadow-md transition-all active:scale-95 disabled:opacity-50"
           >
             {isFetchingAll ? (
               <>
@@ -405,40 +447,21 @@ export function OrdersTable() {
             )}
           </button>
           <button
-            onClick={() => selectedStoreId && handleFetchOrders(selectedStoreId)}
-            disabled={!selectedStoreId || isFetching}
-            className="bg-secondary hover:bg-secondary-dark text-white px-4 py-2 rounded-lg flex items-center shadow-md transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={handleSyncAllStores}
+            disabled={isSyncingAll}
+            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center shadow-md transition-all active:scale-95 disabled:opacity-50"
           >
-            {isFetching ? (
+            {isSyncingAll ? (
               <>
                 <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                Çekiliyor...
+                Eşitleniyor...
               </>
             ) : (
               <>
                 <svg className="w-[18px] h-[18px] mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
-                Seçili Mağazadan Çek (CREATED)
-              </>
-            )}
-          </button>
-          <button
-            onClick={() => selectedStoreId && handleFetchAllStatusesOrders(selectedStoreId)}
-            disabled={!selectedStoreId || isFetchingAllStatuses}
-            className="bg-accent hover:bg-accent-dark text-white px-4 py-2 rounded-lg flex items-center shadow-md transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isFetchingAllStatuses ? (
-              <>
-                <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                Çekiliyor...
-              </>
-            ) : (
-              <>
-                <svg className="w-[18px] h-[18px] mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                Tüm Statüleri Çek
+                Trendyol ile Eşitle
               </>
             )}
           </button>

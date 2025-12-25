@@ -31,7 +31,7 @@ export class OrdersService {
     private readonly productsService: ProductsService,
   ) {}
 
-  async fetchAndSaveOrders(storeId: string): Promise<{
+  async fetchAndSaveOrders(storeId: string, fetchAllStatuses: boolean = false): Promise<{
     saved: number;
     updated: number;
     errors: number;
@@ -48,12 +48,20 @@ export class OrdersService {
       throw new NotFoundException('Store API Key or API Secret not found');
     }
 
-    const params = {
+    const params: {
+      size: number;
+      orderByField: string;
+      orderByDirection: 'ASC' | 'DESC';
+      status?: string;
+    } = {
       size: 200,
       orderByField: 'PackageLastModifiedDate',
       orderByDirection: 'DESC' as const,
-      status: TrendyolOrderStatus.CREATED,
     };
+
+    if (!fetchAllStatuses) {
+      params.status = TrendyolOrderStatus.CREATED;
+    }
 
     let page = 0;
     let totalPages = 1;
@@ -321,7 +329,7 @@ export class OrdersService {
       initialSync = true;
 
       try {
-        const initialSyncResult = await this.fetchAndSaveOrders(storeId);
+        const initialSyncResult = await this.fetchAndSaveOrders(storeId, true);
         initialSyncSaved = initialSyncResult.saved;
         this.logger.log(`Initial sync completed. Saved ${initialSyncSaved} orders with all statuses.`);
       } catch (error) {

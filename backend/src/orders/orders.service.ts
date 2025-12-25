@@ -147,13 +147,39 @@ export class OrdersService {
               await this.orderRepository.save(existingOrder);
               updated++;
             } else {
-              const newOrder = this.orderRepository.create(orderData);
-              await this.orderRepository.save(newOrder);
-              saved++;
+              try {
+                const newOrder = this.orderRepository.create(orderData);
+                await this.orderRepository.save(newOrder);
+                saved++;
+              } catch (saveError: any) {
+                // Duplicate entry hatası (race condition) durumunda mevcut kaydı bulup güncelle
+                if (saveError?.code === 'ER_DUP_ENTRY' || saveError?.message?.includes('Duplicate entry')) {
+                  const duplicateOrder = await this.orderRepository.findOne({
+                    where: { shipmentPackageId: trendyolOrder.shipmentPackageId },
+                  });
+                  
+                  if (duplicateOrder) {
+                    // COLLECTING veya PACKED statüsündeyse güncelleme
+                    if (duplicateOrder.status !== OrderStatus.COLLECTING && duplicateOrder.status !== OrderStatus.PACKED) {
+                      Object.assign(duplicateOrder, orderData);
+                      await this.orderRepository.save(duplicateOrder);
+                      updated++;
+                    } else {
+                      skipped++;
+                    }
+                  } else {
+                    // Duplicate entry hatası ama kayıt bulunamadı, tekrar dene
+                    this.logger.warn(`Duplicate entry for order ${trendyolOrder.orderNumber} (packageId: ${trendyolOrder.shipmentPackageId}) but order not found, skipping`);
+                    skipped++;
+                  }
+                } else {
+                  throw saveError;
+                }
+              }
             }
           } catch (error) {
             errors++;
-            console.error(`Error saving order ${trendyolOrder.orderNumber}:`, error);
+            this.logger.error(`Error saving order ${trendyolOrder.orderNumber}: ${error.message}`, error.stack);
           }
         }
 
@@ -453,9 +479,35 @@ export class OrdersService {
           isActive: store.isActive,
         };
 
-        const newOrder = this.orderRepository.create(orderData);
-        await this.orderRepository.save(newOrder);
-        newOrdersAdded++;
+        try {
+          const newOrder = this.orderRepository.create(orderData);
+          await this.orderRepository.save(newOrder);
+          newOrdersAdded++;
+        } catch (saveError: any) {
+          // Duplicate entry hatası (race condition) durumunda mevcut kaydı bulup güncelle
+          if (saveError?.code === 'ER_DUP_ENTRY' || saveError?.message?.includes('Duplicate entry')) {
+            const duplicateOrder = await this.orderRepository.findOne({
+              where: { shipmentPackageId: packageId },
+            });
+            
+            if (duplicateOrder) {
+              // COLLECTING veya PACKED statüsündeyse güncelleme
+              if (duplicateOrder.status !== OrderStatus.COLLECTING && duplicateOrder.status !== OrderStatus.PACKED) {
+                Object.assign(duplicateOrder, orderData);
+                await this.orderRepository.save(duplicateOrder);
+                ordersUpdated++;
+              } else {
+                ordersSkipped++;
+              }
+            } else {
+              // Duplicate entry hatası ama kayıt bulunamadı
+              this.logger.warn(`Duplicate entry for packageId ${packageId} but order not found, skipping`);
+              ordersSkipped++;
+            }
+          } else {
+            throw saveError;
+          }
+        }
       } catch (error) {
         errors++;
         this.logger.error(`Error adding new order ${packageId}: ${error.message}`, error.stack);

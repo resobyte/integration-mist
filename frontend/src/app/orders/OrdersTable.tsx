@@ -404,48 +404,44 @@ export function OrdersTable() {
               </>
             )}
           </button>
-          {selectedStoreId && (
-            <>
-              <button
-                onClick={() => handleFetchOrders(selectedStoreId)}
-                disabled={isFetching}
-                className="bg-secondary hover:bg-secondary-dark text-white px-4 py-2 rounded-lg flex items-center shadow-md transition-all active:scale-95 disabled:opacity-50"
-              >
-                {isFetching ? (
-                  <>
-                    <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                    Çekiliyor...
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-[18px] h-[18px] mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                    Seçili Mağazadan Çek (CREATED)
-                  </>
-                )}
-              </button>
-              <button
-                onClick={() => handleFetchAllStatusesOrders(selectedStoreId)}
-                disabled={isFetchingAllStatuses}
-                className="bg-accent hover:bg-accent-dark text-white px-4 py-2 rounded-lg flex items-center shadow-md transition-all active:scale-95 disabled:opacity-50"
-              >
-                {isFetchingAllStatuses ? (
-                  <>
-                    <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                    Çekiliyor...
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-[18px] h-[18px] mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    Tüm Statüleri Çek
-                  </>
-                )}
-              </button>
-            </>
-          )}
+          <button
+            onClick={() => selectedStoreId && handleFetchOrders(selectedStoreId)}
+            disabled={!selectedStoreId || isFetching}
+            className="bg-secondary hover:bg-secondary-dark text-white px-4 py-2 rounded-lg flex items-center shadow-md transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isFetching ? (
+              <>
+                <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                Çekiliyor...
+              </>
+            ) : (
+              <>
+                <svg className="w-[18px] h-[18px] mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Seçili Mağazadan Çek (CREATED)
+              </>
+            )}
+          </button>
+          <button
+            onClick={() => selectedStoreId && handleFetchAllStatusesOrders(selectedStoreId)}
+            disabled={!selectedStoreId || isFetchingAllStatuses}
+            className="bg-accent hover:bg-accent-dark text-white px-4 py-2 rounded-lg flex items-center shadow-md transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isFetchingAllStatuses ? (
+              <>
+                <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                Çekiliyor...
+              </>
+            ) : (
+              <>
+                <svg className="w-[18px] h-[18px] mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Tüm Statüleri Çek
+              </>
+            )}
+          </button>
         </div>
       </div>
 

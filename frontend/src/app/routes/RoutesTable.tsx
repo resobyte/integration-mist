@@ -25,6 +25,7 @@ interface FilterData {
   minTotalQuantity?: number;
   maxTotalQuantity?: number;
   overdue?: boolean;
+  search?: string;
 }
 
 interface RouteSuggestionProduct {
@@ -89,6 +90,7 @@ export function RoutesTable() {
     minTotalQuantity: undefined,
     maxTotalQuantity: undefined,
     overdue: false,
+    search: undefined,
   });
   const [filterProductSearch, setFilterProductSearch] = useState('');
   const [isFilterProductDropdownOpen, setIsFilterProductDropdownOpen] = useState(false);
@@ -323,6 +325,9 @@ export function RoutesTable() {
       }
       if (filterData.overdue) {
         params.overdue = 'true';
+      }
+      if (filterData.search && filterData.search.trim()) {
+        params.search = filterData.search.trim();
       }
 
       const response = await apiGet<any[]>('/routes/filter-orders', { params });
@@ -710,7 +715,7 @@ export function RoutesTable() {
         </div>
       </div>
 
-      {filteredOrders.length > 0 && !isModalOpen && (
+      {!isModalOpen && (
         <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
           <div className="p-4 border-b border-border flex justify-between items-center">
             <div className="flex items-center gap-3">
@@ -732,45 +737,49 @@ export function RoutesTable() {
                 Filtrelenmiş Siparişler ({filteredOrders.length})
               </h3>
             </div>
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium"
-            >
-              Rota Oluştur
-            </button>
+            {filteredOrders.length > 0 && (
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium"
+              >
+                Rota Oluştur
+              </button>
+            )}
           </div>
           {!isFilteredOrdersCollapsed && (
-            <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-muted/30 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  <th className="px-6 py-3 w-12">
-                    <input
-                      type="checkbox"
-                      checked={formData.selectedOrderIds.length === filteredOrders.length && filteredOrders.length > 0}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setFormData({
-                            ...formData,
-                            selectedOrderIds: filteredOrders.map((o) => o.id),
-                          });
-                        } else {
-                          setFormData({ ...formData, selectedOrderIds: [] });
-                        }
-                      }}
-                      className="rounded border-input"
-                    />
-                  </th>
-                  <th className="px-6 py-3">Ürünler</th>
-                  <th className="px-6 py-3">Sipariş Sayısı</th>
-                  <th className="px-6 py-3">Toplam Adet</th>
-                  <th className="px-6 py-3">Tip</th>
-                  <th className="px-6 py-3">Mağaza</th>
-                  <th className="px-6 py-3">Sipariş No</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {filteredOrders.map((order) => {
+            <>
+              {filteredOrders.length > 0 ? (
+                <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-muted/30 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <th className="px-6 py-3 w-12">
+                      <input
+                        type="checkbox"
+                        checked={formData.selectedOrderIds.length === filteredOrders.length && filteredOrders.length > 0}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setFormData({
+                              ...formData,
+                              selectedOrderIds: filteredOrders.map((o) => o.id),
+                            });
+                          } else {
+                            setFormData({ ...formData, selectedOrderIds: [] });
+                          }
+                        }}
+                        className="rounded border-input"
+                      />
+                    </th>
+                    <th className="px-6 py-3">Ürünler</th>
+                    <th className="px-6 py-3">Sipariş Sayısı</th>
+                    <th className="px-6 py-3">Toplam Adet</th>
+                    <th className="px-6 py-3">Tip</th>
+                    <th className="px-6 py-3">Mağaza</th>
+                    <th className="px-6 py-3">Sipariş No</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {filteredOrders.map((order) => {
                   const orderLines = order.lines || [];
                   const uniqueProducts = new Set(
                     orderLines.map((line: any) => line.barcode || line.productBarcode).filter(Boolean)
@@ -891,10 +900,16 @@ export function RoutesTable() {
                       <td className="px-6 py-4 text-sm font-medium text-foreground align-middle">{order.orderNumber}</td>
                     </tr>
                   );
-                })}
-              </tbody>
-            </table>
-            </div>
+                  })}
+                </tbody>
+              </table>
+              </div>
+              ) : (
+                <div className="px-6 py-8 text-center text-muted-foreground">
+                  Bu filtreye uygun sipariş bulunamadı.
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
@@ -1533,7 +1548,7 @@ export function RoutesTable() {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
-              setIsFilterModalOpen(false);
+                  setIsFilterModalOpen(false);
                   setFilterData({
                     productBarcodes: [],
                     brand: undefined,
@@ -1544,6 +1559,7 @@ export function RoutesTable() {
                     minTotalQuantity: undefined,
                     maxTotalQuantity: undefined,
                     overdue: false,
+                    search: undefined,
                   });
             }
           }}
@@ -1573,6 +1589,23 @@ export function RoutesTable() {
               </button>
             </div>
             <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Sipariş Ara (Sipariş No veya Müşteri Adı)
+                </label>
+                <input
+                  type="text"
+                  value={filterData.search || ''}
+                  onChange={(e) => {
+                    setFilterData({
+                      ...filterData,
+                      search: e.target.value || undefined,
+                    });
+                  }}
+                  placeholder="Sipariş numarası veya müşteri adı girin..."
+                  className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-muted/20"
+                />
+              </div>
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">Tip</label>
                 <select
@@ -1815,11 +1848,15 @@ export function RoutesTable() {
                     setIsFilterModalOpen(false);
                     setFilterData({
                       productBarcodes: [],
+                      brand: undefined,
                       type: undefined,
+                      storeId: undefined,
                       minOrderCount: undefined,
                       maxOrderCount: undefined,
                       minTotalQuantity: undefined,
                       maxTotalQuantity: undefined,
+                      overdue: false,
+                      search: undefined,
                     });
                   }}
                   className="px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted rounded-lg transition-colors"

@@ -51,5 +51,9 @@ export class RouteFilterDto {
   @IsOptional()
   @Transform(({ value }) => value === 'true' || value === true)
   overdue?: boolean;
+
+  @IsOptional()
+  @IsString()
+  search?: string;
 }
 

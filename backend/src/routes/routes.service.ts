@@ -136,6 +136,14 @@ export class RoutesService {
       queryBuilder.andWhere('store.id = :storeId', { storeId: filter.storeId });
     }
 
+    if (filter.search && filter.search.trim()) {
+      const searchTerm = `%${filter.search.trim().toLowerCase()}%`;
+      queryBuilder.andWhere(
+        '(LOWER(order.orderNumber) LIKE :search OR LOWER(order.customerFirstName) LIKE :search OR LOWER(order.customerLastName) LIKE :search OR LOWER(CONCAT(COALESCE(order.customerFirstName, \'\'), \' \', COALESCE(order.customerLastName, \'\'))) LIKE :search OR LOWER(order.customerEmail) LIKE :search)',
+        { search: searchTerm },
+      );
+    }
+
     if (filter.overdue) {
       // Gecikmiş kargo: agreedDeliveryDate bugünden küçük ve status SHIPPED, DELIVERED, CANCELLED değil
       const now = new Date();

@@ -5,8 +5,10 @@ import { Order } from '../orders/entities/order.entity';
 import { Route } from '../routes/entities/route.entity';
 import { RouteStatus } from '../routes/entities/route.entity';
 import { OrderStatus } from '../orders/entities/order.entity';
+import { Product } from '../products/entities/product.entity';
 import { ReportFilterDto } from './dto/report-filter.dto';
 import { ReportResponseDto } from './dto/report-response.dto';
+import { ProductSalesReportDto } from './dto/product-sales-report.dto';
 
 @Injectable()
 export class ReportsService {
@@ -17,6 +19,8 @@ export class ReportsService {
     private readonly orderRepository: Repository<Order>,
     @InjectRepository(Route)
     private readonly routeRepository: Repository<Route>,
+    @InjectRepository(Product)
+    private readonly productRepository: Repository<Product>,
   ) {}
 
   async getReports(filter: ReportFilterDto): Promise<ReportResponseDto> {
@@ -126,11 +130,64 @@ export class ReportsService {
       return sum + price;
     }, 0);
 
+    const productSalesMap = new Map<string, { barcode: string; quantity: number; revenue: number }>();
+
+    for (const order of filteredOrders) {
+      if (order.lines && Array.isArray(order.lines)) {
+        const orderTotalPrice = typeof order.totalPrice === 'string' ? parseFloat(order.totalPrice) : (order.totalPrice || 0);
+        const orderTotalQuantity = (order.lines as any[]).reduce((sum, line) => sum + (line.quantity || 0), 0);
+        
+        for (const line of order.lines as any[]) {
+          const barcode = line.barcode || line.productBarcode;
+          if (!barcode) continue;
+
+          const quantity = line.quantity || 0;
+          const linePrice = line.price || 0;
+          const lineRevenue = linePrice > 0 ? linePrice * quantity : (orderTotalQuantity > 0 ? (orderTotalPrice / orderTotalQuantity) * quantity : 0);
+
+          const existing = productSalesMap.get(barcode);
+          if (existing) {
+            existing.quantity += quantity;
+            existing.revenue += lineRevenue;
+          } else {
+            productSalesMap.set(barcode, {
+              barcode,
+              quantity,
+              revenue: lineRevenue,
+            });
+          }
+        }
+      }
+    }
+
+    const salesProductBarcodes = Array.from(productSalesMap.keys());
+    const products = salesProductBarcodes.length > 0
+      ? await this.productRepository.find({
+          where: salesProductBarcodes.map(barcode => ({ barcode, isActive: true })),
+        })
+      : [];
+
+    const productMap = new Map(products.map(p => [p.barcode, p]));
+
+    const productSales: ProductSalesReportDto[] = Array.from(productSalesMap.values())
+      .map(({ barcode, quantity, revenue }) => {
+        const product = productMap.get(barcode);
+        return {
+          barcode,
+          productName: product?.name || 'Bilinmeyen Ürün',
+          imageUrl: product?.imageUrl || null,
+          quantity,
+          revenue,
+        };
+      })
+      .sort((a, b) => b.quantity - a.quantity);
+
     return {
       totalRevenue,
       totalOrders: filteredOrders.length,
       totalSalesQuantity,
       totalCompletedRoutes: totalCompletedRoutesResult,
+      productSales,
     };
   }
 }

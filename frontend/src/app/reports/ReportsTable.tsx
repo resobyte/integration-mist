@@ -381,7 +381,7 @@ export function ReportsTable() {
 
       {hoveredProduct && (
         <div
-          className="fixed z-50 pointer-events-none"
+          className="fixed z-40 pointer-events-none"
           style={{
             left: `${Math.min(Math.max(hoveredProduct.x, 150), window.innerWidth - 150)}px`,
             top: `${Math.max(hoveredProduct.y - 320, 10)}px`,

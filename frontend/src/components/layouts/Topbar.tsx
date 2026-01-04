@@ -60,7 +60,7 @@ export function Topbar({ user, onMobileMenuOpen }: TopbarProps) {
   }, []);
 
   return (
-    <header className="h-16 bg-white border-b border-border flex items-center justify-between px-6 shadow-sm">
+    <header className="sticky top-0 h-16 bg-white border-b border-border flex items-center justify-between px-6 shadow-sm z-30">
       <button 
         className="md:hidden text-muted-foreground hover:text-foreground"
         onClick={onMobileMenuOpen}

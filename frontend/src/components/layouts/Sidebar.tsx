@@ -175,13 +175,13 @@ export function Sidebar({ routes, currentPath, isMobileMenuOpen, onMobileMenuClo
       {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (
         <div 
-          className="fixed inset-0 bg-black/50 z-40 md:hidden" 
+          className="fixed inset-0 bg-black/50 z-[60] md:hidden" 
           onClick={onMobileMenuClose} 
         />
       )}
 
       {/* Mobile Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 w-64 bg-white border-r border-border text-foreground z-50 transform transition-transform duration-300 md:hidden ${
+      <aside className={`fixed inset-y-0 left-0 w-64 bg-white border-r border-border text-foreground z-[70] transform transition-transform duration-300 md:hidden ${
         isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
       }`}>
         <div className="p-4 h-16 flex justify-between items-center border-b border-border">

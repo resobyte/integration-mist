@@ -7,11 +7,6 @@ export class ReportFilterDto {
   storeIds?: string[];
 
   @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  productBarcodes?: string[];
-
-  @IsOptional()
   @IsDateString()
   startDate?: string;
 

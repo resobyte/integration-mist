@@ -24,7 +24,7 @@ export class ReportsService {
   ) {}
 
   async getReports(filter: ReportFilterDto): Promise<ReportResponseDto> {
-    const { storeIds, productBarcodes, startDate, endDate } = filter;
+    const { storeIds, startDate, endDate } = filter;
 
     let startTimestamp: number;
     let endTimestamp: number;
@@ -103,16 +103,7 @@ export class ReportsService {
       routeQueryBuilder.clone().getCount(),
     ]);
 
-    let filteredOrders = ordersWithLines;
-    if (productBarcodes && productBarcodes.length > 0) {
-      filteredOrders = ordersWithLines.filter((order) => {
-        if (!order.lines || !Array.isArray(order.lines)) return false;
-        return (order.lines as any[]).some((line: any) => {
-          const barcode = line.barcode || line.productBarcode;
-          return barcode && productBarcodes.includes(barcode);
-        });
-      });
-    }
+    const filteredOrders = ordersWithLines;
 
     let totalSalesQuantity = 0;
     

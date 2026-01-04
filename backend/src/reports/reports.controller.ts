@@ -15,13 +15,11 @@ export class ReportsController {
   @Get()
   async getReports(
     @Query('storeIds', new ParseArrayPipe({ items: String, optional: true, separator: ',' })) storeIds?: string[],
-    @Query('productBarcodes', new ParseArrayPipe({ items: String, optional: true, separator: ',' })) productBarcodes?: string[],
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
   ) {
     const filter: ReportFilterDto = {
       storeIds,
-      productBarcodes,
       startDate,
       endDate,
     };

@@ -44,6 +44,14 @@ export class RoutesController {
     return this.routesService.getFilteredOrders(filter);
   }
 
+  @Post('find-by-order-numbers')
+  async findByOrderNumbers(@Body() body: { orderNumbers: string[] }) {
+    return {
+      success: true,
+      data: await this.routesService.findByOrderNumbers(body.orderNumbers),
+    };
+  }
+
   @Get('suggestions')
   getRouteSuggestions(
     @Query('storeId') storeId?: string,

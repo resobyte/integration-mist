@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useToast } from '@/components/common/ToastContext';
 import { apiGet, apiGetPaginated, apiPost, apiDelete } from '@/lib/api';
 import { getAccessToken } from '@/lib/token';
@@ -8,6 +8,7 @@ import { Route, RouteStatus, Order, Store, Product } from '@/types';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { API_URL } from '@/config/api';
+import * as XLSX from 'xlsx';
 
 interface RouteFormData {
   name: string;
@@ -349,12 +350,19 @@ export function RoutesTable() {
 
     setIsSubmitting(true);
     try {
-      await apiPost('/routes', {
+      const response = await apiPost<{ data: Route }>('/routes', {
         name: formData.name,
         description: formData.description || undefined,
         orderIds: formData.selectedOrderIds,
       });
+
+      const createdRoute = response.data;
       showSuccess('Rota başarıyla oluşturuldu');
+
+      if (createdRoute?.data?.id) {
+        await handlePrintLabel(createdRoute.data.id);
+      }
+
       setIsModalOpen(false);
       setFormData({ name: '', description: '', selectedOrderIds: [] });
       setFilteredOrders([]);
@@ -1589,6 +1597,83 @@ export function RoutesTable() {
               </button>
             </div>
             <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+              <div className="border-b border-border pb-4">
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Excel'den Sipariş Numaraları Yükle
+                </label>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Excel dosyasında A kolonunda sipariş numaraları olmalıdır. Her satırda bir sipariş numarası.
+                </p>
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+
+                    try {
+                      const data = await file.arrayBuffer();
+                      const workbook = XLSX.read(data, { type: 'array' });
+                      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                      const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' });
+
+                      const orderNumbers: string[] = [];
+                      for (const row of jsonData) {
+                        if (Array.isArray(row) && row[0]) {
+                          const orderNumber = String(row[0]).trim();
+                          if (orderNumber) {
+                            orderNumbers.push(orderNumber);
+                          }
+                        }
+                      }
+
+                      if (orderNumbers.length === 0) {
+                        showDanger('Excel dosyasında A kolonunda sipariş numarası bulunamadı');
+                        return;
+                      }
+
+                      const response = await apiPost<any[]>('/routes/find-by-order-numbers', {
+                        orderNumbers,
+                      });
+
+                      const foundOrders = response.data || [];
+                      
+                      if (foundOrders.length === 0) {
+                        showDanger('Hiçbir sipariş bulunamadı');
+                        return;
+                      }
+
+                      const existingOrderIds = new Set(filteredOrders.map((o) => o.id));
+                      const newOrders = foundOrders.filter((o) => !existingOrderIds.has(o.id));
+                      
+                      if (newOrders.length === 0) {
+                        showSuccess('Tüm siparişler zaten listede');
+                        return;
+                      }
+
+                      setFilteredOrders([...filteredOrders, ...newOrders]);
+                      showSuccess(`${newOrders.length} sipariş eklendi. Toplam ${orderNumbers.length} sipariş numarasından ${foundOrders.length} tanesi bulundu.`);
+                      setIsFilterModalOpen(false);
+                    } catch (error) {
+                      const errorMessage = error instanceof Error ? error.message : 'Excel okuma sırasında hata oluştu';
+                      showDanger(errorMessage);
+                    }
+
+                    e.target.value = '';
+                  }}
+                  className="hidden"
+                  id="excel-upload"
+                />
+                <label
+                  htmlFor="excel-upload"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark cursor-pointer transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                  Excel Dosyası Yükle
+                </label>
+              </div>
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">
                   Sipariş Ara (Sipariş No veya Müşteri Adı)

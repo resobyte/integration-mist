@@ -263,6 +263,50 @@ export class RoutesService {
     }));
   }
 
+  async findByOrderNumbers(orderNumbers: string[]): Promise<any[]> {
+    if (!orderNumbers || orderNumbers.length === 0) {
+      return [];
+    }
+
+    const trimmedOrderNumbers = orderNumbers
+      .map((num) => num?.toString().trim())
+      .filter((num) => num && num.length > 0);
+
+    if (trimmedOrderNumbers.length === 0) {
+      return [];
+    }
+
+    const orders = await this.orderRepository
+      .createQueryBuilder('order')
+      .leftJoinAndSelect('order.store', 'store')
+      .where('order.orderNumber IN (:...orderNumbers)', { orderNumbers: trimmedOrderNumbers })
+      .andWhere('order.status NOT IN (:...excludedStatuses)', {
+        excludedStatuses: [
+          OrderStatus.COLLECTING,
+          OrderStatus.PACKED,
+          OrderStatus.SHIPPED,
+          OrderStatus.DELIVERED,
+          OrderStatus.CANCELLED,
+        ],
+      })
+      .andWhere('order.isActive = :isActive', { isActive: true })
+      .andWhere('store.isActive = :storeIsActive', { storeIsActive: true })
+      .getMany();
+
+    return orders.map((order) => ({
+      id: order.id,
+      orderNumber: order.orderNumber,
+      store: order.store ? { id: order.store.id, name: order.store.name } : null,
+      customerFirstName: order.customerFirstName,
+      customerLastName: order.customerLastName,
+      customerEmail: order.customerEmail,
+      shipmentAddress: order.shipmentAddress,
+      lines: order.lines,
+      cargoTrackingNumber: order.cargoTrackingNumber,
+      status: order.status,
+    }));
+  }
+
   async printLabel(routeId: string): Promise<{ zpl: string; route: RouteResponseDto }> {
     const route = await this.routeRepository.findOne({
       where: { id: routeId },

@@ -50,7 +50,7 @@ export function Topbar({ user, onMobileMenuOpen }: TopbarProps) {
     fetchInternalStats();
     fetchExternalStats();
     
-    const internalInterval = setInterval(fetchInternalStats, 30000);
+    const internalInterval = setInterval(fetchInternalStats, 1000); // 1 second
     const externalInterval = setInterval(fetchExternalStats, 60000); // External can be slower
 
     return () => {

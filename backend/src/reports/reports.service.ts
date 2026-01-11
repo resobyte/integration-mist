@@ -29,39 +29,54 @@ export class ReportsService {
     let startTimestamp: number;
     let endTimestamp: number;
     
-    // orderDate GMT+3 (Türkiye saati) formatında timestamp olarak gelir
-    // Seçilen tarihi GMT+3'e göre timestamp'e çeviriyoruz
+    // orderDate GMT+3 (Türkiye saati) formatında timestamp olarak saklanır
+    // Seçilen tarihi GMT+3 saat diliminde yorumlayıp timestamp'e çeviriyoruz
+    // Örnek: "2026-01-01" -> "2026-01-01T00:00:00+03:00" = UTC'de "2025-12-31T21:00:00Z"
     if (startDate) {
-      // YYYY-MM-DD formatındaki tarihi parse edip GMT+3'e göre timestamp oluştur
+      // YYYY-MM-DD formatındaki tarihi GMT+3 saat diliminde yorumla
       const [year, month, day] = startDate.split('-').map(Number);
-      const start = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
-      // GMT+3 offset'i ekle (3 saat = 3 * 60 * 60 * 1000 ms)
-      startTimestamp = start.getTime() + (3 * 60 * 60 * 1000);
+      // GMT+3'teki zamanı direkt oluştur: "YYYY-MM-DDTHH:mm:ss+03:00"
+      const gmt3DateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00+03:00`;
+      startTimestamp = new Date(gmt3DateStr).getTime();
     } else {
-      const today = new Date();
-      const year = today.getFullYear();
-      const month = today.getMonth();
-      const day = today.getDate();
-      const start = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
-      startTimestamp = start.getTime() + (3 * 60 * 60 * 1000);
+      // Bugünün başlangıcını GMT+3'e göre hesapla
+      const now = new Date();
+      // GMT+3 saat dilimindeki bugünün tarihini al
+      const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Europe/Istanbul',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+      const dateStr = formatter.format(now); // YYYY-MM-DD formatında
+      const gmt3DateStr = `${dateStr}T00:00:00+03:00`;
+      startTimestamp = new Date(gmt3DateStr).getTime();
     }
     
     if (endDate) {
       const [year, month, day] = endDate.split('-').map(Number);
-      const end = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
-      // GMT+3 offset'i ekle
-      endTimestamp = end.getTime() + (3 * 60 * 60 * 1000);
+      // GMT+3'teki günün sonunu oluştur
+      const gmt3DateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T23:59:59.999+03:00`;
+      endTimestamp = new Date(gmt3DateStr).getTime();
     } else {
-      const today = new Date();
-      const year = today.getFullYear();
-      const month = today.getMonth();
-      const day = today.getDate();
-      const end = new Date(Date.UTC(year, month, day, 23, 59, 59, 999));
-      endTimestamp = end.getTime() + (3 * 60 * 60 * 1000);
+      // Bugünün sonunu GMT+3'e göre hesapla
+      const now = new Date();
+      // GMT+3 saat dilimindeki bugünün tarihini al
+      const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Europe/Istanbul',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+      const dateStr = formatter.format(now); // YYYY-MM-DD formatında
+      const gmt3DateStr = `${dateStr}T23:59:59.999+03:00`;
+      endTimestamp = new Date(gmt3DateStr).getTime();
     }
 
     this.logger.debug(`Date filter: startDate=${startDate}, endDate=${endDate}, startTimestamp=${startTimestamp}, endTimestamp=${endTimestamp}`);
 
+    // orderDate bigint (GMT+3 formatında timestamp) olarak saklanır
+    // startTimestamp ve endTimestamp de GMT+3 formatında hesaplandığı için direkt karşılaştırma yapılabilir
     const orderQueryBuilder = this.orderRepository
       .createQueryBuilder('order')
       .leftJoin('order.store', 'store')
@@ -75,11 +90,37 @@ export class ReportsService {
       orderQueryBuilder.andWhere('order.storeId IN (:...storeIds)', { storeIds });
     }
 
-    const routeStart = startDate ? new Date(startDate) : new Date();
-    routeStart.setHours(0, 0, 0, 0);
+    // createdAt GMT formatında timestamp olarak saklanır
+    // Seçilen tarihi GMT (UTC) saat diliminde yorumlayıp timestamp'e çeviriyoruz
+    let routeStartTimestamp: Date;
+    let routeEndTimestamp: Date;
     
-    const routeEnd = endDate ? new Date(endDate) : new Date();
-    routeEnd.setHours(23, 59, 59, 999);
+    if (startDate) {
+      // YYYY-MM-DD formatındaki tarihi GMT (UTC) saat diliminde yorumla
+      const [year, month, day] = startDate.split('-').map(Number);
+      // GMT'deki zamanı direkt oluştur: "YYYY-MM-DDTHH:mm:ssZ"
+      routeStartTimestamp = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+    } else {
+      // Bugünün başlangıcını GMT'ye göre hesapla
+      const now = new Date();
+      const year = now.getUTCFullYear();
+      const month = now.getUTCMonth();
+      const day = now.getUTCDate();
+      routeStartTimestamp = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
+    }
+    
+    if (endDate) {
+      const [year, month, day] = endDate.split('-').map(Number);
+      // GMT'deki günün sonunu oluştur
+      routeEndTimestamp = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+    } else {
+      // Bugünün sonunu GMT'ye göre hesapla
+      const now = new Date();
+      const year = now.getUTCFullYear();
+      const month = now.getUTCMonth();
+      const day = now.getUTCDate();
+      routeEndTimestamp = new Date(Date.UTC(year, month, day, 23, 59, 59, 999));
+    }
 
     const routeQueryBuilder = this.routeRepository
       .createQueryBuilder('route')
@@ -88,8 +129,8 @@ export class ReportsService {
       .where('route.isActive = :isActive', { isActive: true })
       .andWhere('store.isActive = :storeIsActive', { storeIsActive: true })
       .andWhere('route.status = :completedStatus', { completedStatus: RouteStatus.COMPLETED })
-      .andWhere('route.createdAt >= :routeStartDate', { routeStartDate: routeStart })
-      .andWhere('route.createdAt <= :routeEndDate', { routeEndDate: routeEnd });
+      .andWhere('route.createdAt >= :routeStartDate', { routeStartDate: routeStartTimestamp })
+      .andWhere('route.createdAt <= :routeEndDate', { routeEndDate: routeEndTimestamp });
 
     if (storeIds && storeIds.length > 0) {
       routeQueryBuilder.andWhere('order.storeId IN (:...storeIds)', { storeIds });

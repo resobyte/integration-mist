@@ -75,6 +75,7 @@ export class ReportsService {
     // orderDate bigint (GMT+3 formatında timestamp) olarak saklanır
     // startTimestamp ve endTimestamp de GMT+3 formatında hesaplandığı için direkt karşılaştırma yapılabilir
     // Trendyol panelinde CANCELLED ve RETURNED siparişler ciroya dahil edilmez
+    // Hem bizim status hem de trendyolStatus kontrol edilmeli
     const orderQueryBuilder = this.orderRepository
       .createQueryBuilder('order')
       .leftJoin('order.store', 'store')
@@ -82,6 +83,9 @@ export class ReportsService {
       .andWhere('store.isActive = :storeIsActive', { storeIsActive: true })
       .andWhere('order.status NOT IN (:...excludedStatuses)', { 
         excludedStatuses: [OrderStatus.CANCELLED, OrderStatus.RETURNED] 
+      })
+      .andWhere('order.trendyolStatus NOT IN (:...excludedTrendyolStatuses)', {
+        excludedTrendyolStatuses: ['Cancelled', 'Returned', 'UnSupplied']
       })
       .andWhere('order.orderDate >= :startDate', { startDate: startTimestamp })
       .andWhere('order.orderDate <= :endDate', { endDate: endTimestamp });

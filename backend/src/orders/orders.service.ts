@@ -261,12 +261,22 @@ export class OrdersService {
     }
 
     if (overdue) {
+      // agreedDeliveryDate, orderDate gibi GMT+3 formatında timestamp olarak saklanır
+      // Bugünün başlangıcını GMT+3'e göre hesaplayıp doğrudan Date.UTC kullanmalıyız
       const now = new Date();
-      const nowGMT3 = now.getTime() + (3 * 60 * 60 * 1000);
+      const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Europe/Istanbul',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+      const dateStr = formatter.format(now);
+      const [year, month, day] = dateStr.split('-').map(Number);
+      const todayStartGMT3 = Date.UTC(year, month - 1, day, 0, 0, 0, 0);
       
       queryBuilder
         .andWhere('order.agreedDeliveryDate IS NOT NULL')
-        .andWhere('order.agreedDeliveryDate < :nowGMT3', { nowGMT3 })
+        .andWhere('order.agreedDeliveryDate < :todayStartGMT3', { todayStartGMT3 })
         .andWhere('order.status NOT IN (:...excludedStatuses)', {
           excludedStatuses: [OrderStatus.SHIPPED, OrderStatus.DELIVERED, OrderStatus.CANCELLED],
         });

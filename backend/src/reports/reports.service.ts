@@ -29,48 +29,45 @@ export class ReportsService {
     let startTimestamp: number;
     let endTimestamp: number;
     
-    // orderDate GMT+3 (Türkiye saati) formatında timestamp olarak saklanır
-    // Seçilen tarihi GMT+3 saat diliminde yorumlayıp timestamp'e çeviriyoruz
-    // Örnek: "2026-01-01" -> "2026-01-01T00:00:00+03:00" = UTC'de "2025-12-31T21:00:00Z"
+    // orderDate GMT+3 formatında timestamp olarak doğrudan saklanır
+    // Yani orderDate = 1768176155973 değeri "12 Ocak 2026 00:02:35 GMT+3" anlamına gelir
+    // Bu değer UTC'ye çevrilmemiş, doğrudan GMT+3 saatinin timestamp'i
+    // Bu yüzden karşılaştırma için de aynı formatta timestamp oluşturmalıyız
     if (startDate) {
-      // YYYY-MM-DD formatındaki tarihi GMT+3 saat diliminde yorumla
       const [year, month, day] = startDate.split('-').map(Number);
-      // GMT+3'teki zamanı direkt oluştur: "YYYY-MM-DDTHH:mm:ss+03:00"
-      const gmt3DateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00+03:00`;
-      startTimestamp = new Date(gmt3DateStr).getTime();
+      // Tarihi doğrudan UTC timestamp olarak oluştur (timezone offset yok)
+      // "2026-01-12 00:00:00" -> 1768176000000 (GMT+3 formatıyla eşleşir)
+      startTimestamp = Date.UTC(year, month - 1, day, 0, 0, 0, 0);
     } else {
       // Bugünün başlangıcını GMT+3'e göre hesapla
       const now = new Date();
-      // GMT+3 saat dilimindeki bugünün tarihini al
       const formatter = new Intl.DateTimeFormat('en-CA', {
         timeZone: 'Europe/Istanbul',
         year: 'numeric',
         month: '2-digit',
         day: '2-digit',
       });
-      const dateStr = formatter.format(now); // YYYY-MM-DD formatında
-      const gmt3DateStr = `${dateStr}T00:00:00+03:00`;
-      startTimestamp = new Date(gmt3DateStr).getTime();
+      const dateStr = formatter.format(now);
+      const [year, month, day] = dateStr.split('-').map(Number);
+      startTimestamp = Date.UTC(year, month - 1, day, 0, 0, 0, 0);
     }
     
     if (endDate) {
       const [year, month, day] = endDate.split('-').map(Number);
-      // GMT+3'teki günün sonunu oluştur
-      const gmt3DateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T23:59:59.999+03:00`;
-      endTimestamp = new Date(gmt3DateStr).getTime();
+      // Tarihi doğrudan UTC timestamp olarak oluştur (günün sonu)
+      endTimestamp = Date.UTC(year, month - 1, day, 23, 59, 59, 999);
     } else {
       // Bugünün sonunu GMT+3'e göre hesapla
       const now = new Date();
-      // GMT+3 saat dilimindeki bugünün tarihini al
       const formatter = new Intl.DateTimeFormat('en-CA', {
         timeZone: 'Europe/Istanbul',
         year: 'numeric',
         month: '2-digit',
         day: '2-digit',
       });
-      const dateStr = formatter.format(now); // YYYY-MM-DD formatında
-      const gmt3DateStr = `${dateStr}T23:59:59.999+03:00`;
-      endTimestamp = new Date(gmt3DateStr).getTime();
+      const dateStr = formatter.format(now);
+      const [year, month, day] = dateStr.split('-').map(Number);
+      endTimestamp = Date.UTC(year, month - 1, day, 23, 59, 59, 999);
     }
 
     this.logger.debug(`Date filter: startDate=${startDate}, endDate=${endDate}, startTimestamp=${startTimestamp}, endTimestamp=${endTimestamp}`);
@@ -93,36 +90,44 @@ export class ReportsService {
       orderQueryBuilder.andWhere('order.storeId IN (:...storeIds)', { storeIds });
     }
 
-    // createdAt GMT formatında timestamp olarak saklanır
-    // Seçilen tarihi GMT (UTC) saat diliminde yorumlayıp timestamp'e çeviriyoruz
+    // createdAt UTC formatında timestamp olarak saklanır
+    // Kullanıcı tarihi GMT+3'te seçiyor, bu yüzden GMT+3'ten UTC'ye çevirmeliyiz
+    // Örnek: "2026-01-12" GMT+3 = "2026-01-12T00:00:00+03:00" = UTC'de "2026-01-11T21:00:00Z"
     let routeStartTimestamp: Date;
     let routeEndTimestamp: Date;
     
     if (startDate) {
-      // YYYY-MM-DD formatındaki tarihi GMT (UTC) saat diliminde yorumla
       const [year, month, day] = startDate.split('-').map(Number);
-      // GMT'deki zamanı direkt oluştur: "YYYY-MM-DDTHH:mm:ssZ"
-      routeStartTimestamp = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+      const gmt3DateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00+03:00`;
+      routeStartTimestamp = new Date(gmt3DateStr);
     } else {
-      // Bugünün başlangıcını GMT'ye göre hesapla
       const now = new Date();
-      const year = now.getUTCFullYear();
-      const month = now.getUTCMonth();
-      const day = now.getUTCDate();
-      routeStartTimestamp = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
+      const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Europe/Istanbul',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+      const dateStr = formatter.format(now);
+      const gmt3DateStr = `${dateStr}T00:00:00+03:00`;
+      routeStartTimestamp = new Date(gmt3DateStr);
     }
     
     if (endDate) {
       const [year, month, day] = endDate.split('-').map(Number);
-      // GMT'deki günün sonunu oluştur
-      routeEndTimestamp = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+      const gmt3DateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T23:59:59.999+03:00`;
+      routeEndTimestamp = new Date(gmt3DateStr);
     } else {
-      // Bugünün sonunu GMT'ye göre hesapla
       const now = new Date();
-      const year = now.getUTCFullYear();
-      const month = now.getUTCMonth();
-      const day = now.getUTCDate();
-      routeEndTimestamp = new Date(Date.UTC(year, month, day, 23, 59, 59, 999));
+      const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Europe/Istanbul',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+      const dateStr = formatter.format(now);
+      const gmt3DateStr = `${dateStr}T23:59:59.999+03:00`;
+      routeEndTimestamp = new Date(gmt3DateStr);
     }
 
     const routeQueryBuilder = this.routeRepository

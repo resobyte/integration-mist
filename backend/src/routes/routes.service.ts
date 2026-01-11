@@ -146,10 +146,18 @@ export class RoutesService {
 
     if (filter.overdue) {
       // Gecikmiş kargo: agreedDeliveryDate bugünden küçük ve status SHIPPED, DELIVERED, CANCELLED değil
+      // agreedDeliveryDate, orderDate gibi GMT+3 formatında timestamp olarak saklanır
+      // Bu yüzden bugünün başlangıcını GMT+3'e göre hesaplayıp doğrudan Date.UTC kullanmalıyız
       const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const todayStartUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0));
-      const todayStartGMT3 = todayStartUTC.getTime() + (3 * 60 * 60 * 1000);
+      const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Europe/Istanbul',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+      const dateStr = formatter.format(now);
+      const [year, month, day] = dateStr.split('-').map(Number);
+      const todayStartGMT3 = Date.UTC(year, month - 1, day, 0, 0, 0, 0);
 
       queryBuilder
         .andWhere('order.agreedDeliveryDate IS NOT NULL')
@@ -448,10 +456,17 @@ export class RoutesService {
 
     if (overdue) {
       // Gecikmiş kargo: agreedDeliveryDate bugünden küçük
+      // agreedDeliveryDate, orderDate gibi GMT+3 formatında timestamp olarak saklanır
       const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const todayStartUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0));
-      const todayStartGMT3 = todayStartUTC.getTime() + (3 * 60 * 60 * 1000);
+      const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Europe/Istanbul',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+      const dateStr = formatter.format(now);
+      const [year, month, day] = dateStr.split('-').map(Number);
+      const todayStartGMT3 = Date.UTC(year, month - 1, day, 0, 0, 0, 0);
 
       queryBuilder
         .andWhere('order.agreedDeliveryDate IS NOT NULL')

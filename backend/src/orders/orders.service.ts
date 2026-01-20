@@ -58,32 +58,85 @@ export class OrdersService {
       }
     }
 
-    const startDate = new Date('2025-12-01T00:00:00.000+03:00').getTime();
-
-    const params: {
-      size: number;
-      orderByField: string;
-      orderByDirection: 'ASC' | 'DESC';
-      status?: string;
-      startDate: number;
-    } = {
-      size: 200,
-      orderByField: 'PackageLastModifiedDate',
-      orderByDirection: 'DESC' as const,
-      startDate,
-    };
-
-    if (!fetchAllStatuses) {
-      params.status = TrendyolOrderStatus.CREATED;
-    }
-
-    let page = 0;
-    let totalPages = 1;
     let saved = 0;
     let updated = 0;
     let errors = 0;
     let skipped = 0;
     const skippedOrders: SkippedOrder[] = [];
+
+    if (fetchAllStatuses) {
+      const startFromDate = new Date('2025-12-01T00:00:00.000+03:00').getTime();
+      const now = Date.now();
+      const twoWeeksMs = 14 * 24 * 60 * 60 * 1000;
+
+      let currentStart = startFromDate;
+      let periodIndex = 0;
+
+      while (currentStart < now) {
+        const currentEnd = Math.min(currentStart + twoWeeksMs, now);
+        periodIndex++;
+
+        this.logger.log(
+          `Store ${store.name}: Fetching period ${periodIndex} (${new Date(currentStart).toISOString()} - ${new Date(currentEnd).toISOString()})`
+        );
+
+        let page = 0;
+        let totalPages = 1;
+
+        while (page < totalPages) {
+          try {
+            const response = await this.trendyolApiService.getOrders(
+              store.sellerId,
+              store.apiKey,
+              store.apiSecret,
+              {
+                size: 200,
+                orderByField: 'PackageLastModifiedDate',
+                orderByDirection: 'DESC',
+                startDate: currentStart,
+                endDate: currentEnd,
+                page,
+              },
+              store.proxyUrl || undefined,
+            );
+
+            totalPages = response.totalPages;
+
+            const result = await this.processOrdersFromResponse(store, response.content, skippedOrders);
+            saved += result.saved;
+            updated += result.updated;
+            errors += result.errors;
+            skipped += result.skipped;
+
+            page++;
+          } catch (error) {
+            this.logger.error(`Error fetching orders for period ${periodIndex}, page ${page}: ${error.message}`, error.stack);
+            errors++;
+            break;
+          }
+        }
+
+        currentStart = currentEnd;
+      }
+
+      this.logger.log(`Store ${store.name}: Completed all periods. Saved: ${saved}, Updated: ${updated}, Errors: ${errors}, Skipped: ${skipped}`);
+      return { saved, updated, errors, skipped, skippedOrders };
+    }
+
+    const params: {
+      size: number;
+      orderByField: string;
+      orderByDirection: 'ASC' | 'DESC';
+      status: string;
+    } = {
+      size: 200,
+      orderByField: 'PackageLastModifiedDate',
+      orderByDirection: 'DESC' as const,
+      status: TrendyolOrderStatus.CREATED,
+    };
+
+    let page = 0;
+    let totalPages = 1;
 
     while (page < totalPages) {
       try {
@@ -97,121 +150,163 @@ export class OrdersService {
 
         totalPages = response.totalPages;
 
-        for (const trendyolOrder of response.content) {
-          try {
-            const orderBarcodes = this.extractBarcodesFromLines(trendyolOrder.lines);
-            
-            if (orderBarcodes.length > 0) {
-              const existingBarcodes = await this.productsService.getExistingBarcodes(orderBarcodes);
-              const missingBarcodes = orderBarcodes.filter((b) => !existingBarcodes.has(b));
-
-              if (missingBarcodes.length > 0) {
-                skipped++;
-                skippedOrders.push({
-                  orderNumber: trendyolOrder.orderNumber,
-                  shipmentPackageId: trendyolOrder.shipmentPackageId,
-                  missingBarcodes,
-                });
-                continue;
-              }
-            }
-
-            const existingOrder = await this.orderRepository.findOne({
-              where: { shipmentPackageId: trendyolOrder.shipmentPackageId },
-            });
-
-            // Eğer sipariş COLLECTING veya PACKED statüsündeyse, status'ünü koru (kullanıcı işlem yapıyor)
-            if (existingOrder && (existingOrder.status === OrderStatus.COLLECTING || existingOrder.status === OrderStatus.PACKED)) {
-              this.logger.debug(`Order ${trendyolOrder.orderNumber} (packageId: ${trendyolOrder.shipmentPackageId}) is ${existingOrder.status}, skipping status update to avoid overwriting user's work`);
-              continue;
-            }
-
-            const orderData = {
-              storeId: store.id,
-              orderNumber: trendyolOrder.orderNumber,
-              shipmentPackageId: trendyolOrder.shipmentPackageId,
-              trendyolCustomerId: trendyolOrder.customerId,
-              supplierId: trendyolOrder.supplierId,
-              trendyolStatus: trendyolOrder.shipmentPackageStatus || trendyolOrder.status,
-              status: this.mapTrendyolStatusToOrderStatus(trendyolOrder.shipmentPackageStatus || trendyolOrder.status),
-              customerFirstName: trendyolOrder.customerFirstName,
-              customerLastName: trendyolOrder.customerLastName,
-              customerEmail: trendyolOrder.customerEmail,
-              orderDate: trendyolOrder.orderDate,
-              grossAmount: trendyolOrder.packageGrossAmount || trendyolOrder.grossAmount,
-              totalPrice: trendyolOrder.packageTotalPrice || trendyolOrder.totalPrice,
-              currencyCode: trendyolOrder.currencyCode,
-              cargoTrackingNumber: trendyolOrder.cargoTrackingNumber,
-              cargoProviderName: trendyolOrder.cargoProviderName,
-              cargoTrackingLink: trendyolOrder.cargoTrackingLink,
-              shipmentAddress: trendyolOrder.shipmentAddress,
-              invoiceAddress: trendyolOrder.invoiceAddress,
-              lines: trendyolOrder.lines,
-              packageHistories: trendyolOrder.packageHistories,
-              commercial: trendyolOrder.commercial || false,
-              micro: trendyolOrder.micro || false,
-              deliveryAddressType: trendyolOrder.deliveryAddressType,
-              lastModifiedDate: trendyolOrder.lastModifiedDate,
-              agreedDeliveryDate: trendyolOrder.agreedDeliveryDate || null,
-              isActive: store.isActive,
-            };
-
-            if (existingOrder) {
-              existingOrder.trendyolStatus = trendyolOrder.shipmentPackageStatus || trendyolOrder.status;
-              existingOrder.status = this.mapTrendyolStatusToOrderStatus(existingOrder.trendyolStatus);
-              existingOrder.cargoTrackingNumber = trendyolOrder.cargoTrackingNumber || null;
-              existingOrder.cargoProviderName = trendyolOrder.cargoProviderName || null;
-              existingOrder.cargoTrackingLink = trendyolOrder.cargoTrackingLink || null;
-              existingOrder.lastModifiedDate = trendyolOrder.lastModifiedDate || null;
-              existingOrder.agreedDeliveryDate = trendyolOrder.agreedDeliveryDate || null;
-              await this.orderRepository.save(existingOrder);
-              updated++;
-            } else {
-              try {
-                const newOrder = this.orderRepository.create(orderData);
-                await this.orderRepository.save(newOrder);
-                saved++;
-              } catch (saveError: any) {
-                // Duplicate entry hatası (race condition) durumunda mevcut kaydı bulup güncelle
-                if (saveError?.code === 'ER_DUP_ENTRY' || saveError?.message?.includes('Duplicate entry')) {
-                  const duplicateOrder = await this.orderRepository.findOne({
-                    where: { shipmentPackageId: trendyolOrder.shipmentPackageId },
-                  });
-                  
-                  if (duplicateOrder) {
-                    // COLLECTING veya PACKED statüsündeyse güncelleme
-                    if (duplicateOrder.status !== OrderStatus.COLLECTING && duplicateOrder.status !== OrderStatus.PACKED) {
-                      Object.assign(duplicateOrder, orderData);
-                      await this.orderRepository.save(duplicateOrder);
-                      updated++;
-                    } else {
-                      skipped++;
-                    }
-                  } else {
-                    // Duplicate entry hatası ama kayıt bulunamadı, tekrar dene
-                    this.logger.warn(`Duplicate entry for order ${trendyolOrder.orderNumber} (packageId: ${trendyolOrder.shipmentPackageId}) but order not found, skipping`);
-                    skipped++;
-                  }
-                } else {
-                  throw saveError;
-                }
-              }
-            }
-          } catch (error) {
-            errors++;
-            this.logger.error(`Error saving order ${trendyolOrder.orderNumber}: ${error.message}`, error.stack);
-          }
-        }
+        const result = await this.processOrdersFromResponse(store, response.content, skippedOrders);
+        saved += result.saved;
+        updated += result.updated;
+        errors += result.errors;
+        skipped += result.skipped;
 
         page++;
       } catch (error) {
         errors++;
-        console.error(`Error fetching page ${page}:`, error);
+        this.logger.error(`Error fetching page ${page}: ${(error as Error).message}`);
         break;
       }
     }
 
     return { saved, updated, errors, skipped, skippedOrders };
+  }
+
+  private async processOrdersFromResponse(
+    store: { id: string; isActive: boolean },
+    orders: Array<{
+      orderNumber: string;
+      shipmentPackageId: number;
+      customerId: number;
+      supplierId: number;
+      customerFirstName: string;
+      customerLastName: string;
+      customerEmail: string;
+      orderDate: number;
+      grossAmount: number;
+      packageGrossAmount: number;
+      totalPrice: number;
+      packageTotalPrice: number;
+      currencyCode: string;
+      cargoTrackingNumber?: string;
+      cargoProviderName?: string;
+      cargoTrackingLink?: string;
+      shipmentAddress?: Record<string, unknown>;
+      invoiceAddress?: Record<string, unknown>;
+      lines?: Record<string, unknown>[];
+      packageHistories?: Array<{ createdDate: number; status: string }>;
+      shipmentPackageStatus: string;
+      status: string;
+      commercial: boolean;
+      micro: boolean;
+      deliveryAddressType?: string;
+      lastModifiedDate?: number;
+      agreedDeliveryDate?: number;
+    }>,
+    skippedOrders: SkippedOrder[],
+  ): Promise<{ saved: number; updated: number; errors: number; skipped: number }> {
+    let saved = 0;
+    let updated = 0;
+    let errors = 0;
+    let skipped = 0;
+
+    for (const trendyolOrder of orders) {
+      try {
+        const orderBarcodes = this.extractBarcodesFromLines(trendyolOrder.lines);
+
+        if (orderBarcodes.length > 0) {
+          const existingBarcodes = await this.productsService.getExistingBarcodes(orderBarcodes);
+          const missingBarcodes = orderBarcodes.filter((b) => !existingBarcodes.has(b));
+
+          if (missingBarcodes.length > 0) {
+            skipped++;
+            skippedOrders.push({
+              orderNumber: trendyolOrder.orderNumber,
+              shipmentPackageId: trendyolOrder.shipmentPackageId,
+              missingBarcodes,
+            });
+            continue;
+          }
+        }
+
+        const existingOrder = await this.orderRepository.findOne({
+          where: { shipmentPackageId: trendyolOrder.shipmentPackageId },
+        });
+
+        if (existingOrder && (existingOrder.status === OrderStatus.COLLECTING || existingOrder.status === OrderStatus.PACKED)) {
+          continue;
+        }
+
+        const orderData = {
+          storeId: store.id,
+          orderNumber: trendyolOrder.orderNumber,
+          shipmentPackageId: trendyolOrder.shipmentPackageId,
+          trendyolCustomerId: trendyolOrder.customerId,
+          supplierId: trendyolOrder.supplierId,
+          trendyolStatus: trendyolOrder.shipmentPackageStatus || trendyolOrder.status,
+          status: this.mapTrendyolStatusToOrderStatus(trendyolOrder.shipmentPackageStatus || trendyolOrder.status),
+          customerFirstName: trendyolOrder.customerFirstName,
+          customerLastName: trendyolOrder.customerLastName,
+          customerEmail: trendyolOrder.customerEmail,
+          orderDate: trendyolOrder.orderDate,
+          grossAmount: trendyolOrder.packageGrossAmount || trendyolOrder.grossAmount,
+          totalPrice: trendyolOrder.packageTotalPrice || trendyolOrder.totalPrice,
+          currencyCode: trendyolOrder.currencyCode,
+          cargoTrackingNumber: trendyolOrder.cargoTrackingNumber,
+          cargoProviderName: trendyolOrder.cargoProviderName,
+          cargoTrackingLink: trendyolOrder.cargoTrackingLink,
+          shipmentAddress: trendyolOrder.shipmentAddress,
+          invoiceAddress: trendyolOrder.invoiceAddress,
+          lines: trendyolOrder.lines,
+          packageHistories: trendyolOrder.packageHistories,
+          commercial: trendyolOrder.commercial || false,
+          micro: trendyolOrder.micro || false,
+          deliveryAddressType: trendyolOrder.deliveryAddressType,
+          lastModifiedDate: trendyolOrder.lastModifiedDate,
+          agreedDeliveryDate: trendyolOrder.agreedDeliveryDate || null,
+          isActive: store.isActive,
+        };
+
+        if (existingOrder) {
+          existingOrder.trendyolStatus = trendyolOrder.shipmentPackageStatus || trendyolOrder.status;
+          existingOrder.status = this.mapTrendyolStatusToOrderStatus(existingOrder.trendyolStatus);
+          existingOrder.cargoTrackingNumber = trendyolOrder.cargoTrackingNumber || null;
+          existingOrder.cargoProviderName = trendyolOrder.cargoProviderName || null;
+          existingOrder.cargoTrackingLink = trendyolOrder.cargoTrackingLink || null;
+          existingOrder.lastModifiedDate = trendyolOrder.lastModifiedDate || null;
+          existingOrder.agreedDeliveryDate = trendyolOrder.agreedDeliveryDate || null;
+          await this.orderRepository.save(existingOrder);
+          updated++;
+        } else {
+          try {
+            const newOrder = this.orderRepository.create(orderData);
+            await this.orderRepository.save(newOrder);
+            saved++;
+          } catch (saveError: unknown) {
+            const err = saveError as { code?: string; message?: string };
+            if (err?.code === 'ER_DUP_ENTRY' || err?.message?.includes('Duplicate entry')) {
+              const duplicateOrder = await this.orderRepository.findOne({
+                where: { shipmentPackageId: trendyolOrder.shipmentPackageId },
+              });
+
+              if (duplicateOrder) {
+                if (duplicateOrder.status !== OrderStatus.COLLECTING && duplicateOrder.status !== OrderStatus.PACKED) {
+                  Object.assign(duplicateOrder, orderData);
+                  await this.orderRepository.save(duplicateOrder);
+                  updated++;
+                } else {
+                  skipped++;
+                }
+              } else {
+                skipped++;
+              }
+            } else {
+              throw saveError;
+            }
+          }
+        }
+      } catch (error) {
+        errors++;
+        this.logger.error(`Error processing order ${trendyolOrder.orderNumber}: ${(error as Error).message}`);
+      }
+    }
+
+    return { saved, updated, errors, skipped };
   }
 
   private extractBarcodesFromLines(lines: Record<string, unknown>[] | undefined): string[] {

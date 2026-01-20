@@ -1,6 +1,6 @@
 import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import axios, { AxiosInstance } from 'axios';
+import axios from 'axios';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 
 interface TrendyolOrderResponse {
@@ -66,6 +66,7 @@ export class TrendyolApiService {
       size?: number;
       orderByField?: string;
       orderByDirection?: 'ASC' | 'DESC';
+      shipmentPackagesId?: number[];
     },
     proxyUrl?: string,
   ): Promise<TrendyolOrderResponse> {
@@ -83,6 +84,7 @@ export class TrendyolApiService {
       if (params?.size) queryParams.append('size', params.size.toString());
       if (params?.orderByField) queryParams.append('orderByField', params.orderByField);
       if (params?.orderByDirection) queryParams.append('orderByDirection', params.orderByDirection);
+      if (params?.shipmentPackagesId?.length) queryParams.append('shipmentPackagesId', params.shipmentPackagesId.join(','));
 
       const fullUrl = queryParams.toString() ? `${url}?${queryParams.toString()}` : url;
 
@@ -139,64 +141,6 @@ export class TrendyolApiService {
         `Failed to fetch orders from Trendyol: ${error.message}`,
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
-    }
-  }
-
-  async getOrderByPackageId(
-    sellerId: string,
-    apiKey: string,
-    apiSecret: string,
-    packageId: number,
-    proxyUrl?: string,
-  ): Promise<TrendyolOrder | null> {
-    try {
-      const baseUrl = this.configService.get<string>('TRENDYOL_ORDER_API_URL') || 
-                     'https://apigw.trendyol.com/integration/order/sellers';
-
-      const url = `${baseUrl}/${sellerId}/shipment-packages/${packageId}`;
-
-      const integrationCompanyName = this.configService.get<string>('TRENDYOL_INTEGRATION_COMPANY_NAME', 'SelfIntegration');
-      const userAgent = this.configService.get<string>('TRENDYOL_USER_AGENT', `${sellerId} - ${integrationCompanyName}`.substring(0, 30));
-
-      const tokenString = `${apiKey}:${apiSecret}`;
-      const base64Token = Buffer.from(tokenString, 'utf8').toString('base64');
-      const authToken = `Basic ${base64Token}`;
-
-      const axiosConfig: any = {
-        headers: {
-          'Authorization': authToken,
-          'Content-Type': 'application/json',
-          'Accept-Encoding': 'gzip, deflate, br',
-          'User-Agent': userAgent,
-        },
-        maxRedirects: 0,
-        timeout: 30000,
-      };
-
-      if (proxyUrl) {
-        try {
-          axiosConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
-          axiosConfig.proxy = false;
-        } catch (proxyError) {
-          this.logger.error(`Invalid proxy URL for ${sellerId}: ${proxyUrl}`);
-        }
-      }
-
-      const response = await axios.get<TrendyolOrder>(url, axiosConfig);
-      return response.data;
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        if (error.response?.status === 404) {
-          this.logger.warn(`Package ${packageId} not found in Trendyol`);
-          return null;
-        }
-        if (error.response) {
-          this.logger.error(`Error fetching package ${packageId}: ${error.response.status} - ${JSON.stringify(error.response.data)}`);
-          return null;
-        }
-      }
-      this.logger.error(`Error fetching package ${packageId} from Trendyol: ${error.message}`, error.stack);
-      return null;
     }
   }
 

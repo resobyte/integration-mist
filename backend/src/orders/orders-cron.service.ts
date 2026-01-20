@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { OrdersService } from './orders.service';
 import { StoresService } from '../stores/stores.service';
+import { SyncLockService } from './sync-lock.service';
 
 @Injectable()
 export class OrdersCronService {
@@ -10,10 +11,16 @@ export class OrdersCronService {
   constructor(
     private readonly ordersService: OrdersService,
     private readonly storesService: StoresService,
+    private readonly syncLockService: SyncLockService,
   ) {}
 
   @Cron('*/1 * * * *')
   async handleOrdersFetch() {
+    if (this.syncLockService.isLocked) {
+      this.logger.log('Skipping order fetch cron - manual sync in progress');
+      return;
+    }
+
     try {
       const storesResponse = await this.storesService.findAll(
         { page: 1, limit: 1000, sortBy: 'createdAt', sortOrder: 'ASC' },
@@ -40,6 +47,11 @@ export class OrdersCronService {
 
   @Cron('0 * * * *')
   async handleNonDeliveredOrdersSync() {
+    if (this.syncLockService.isLocked) {
+      this.logger.log('Skipping non-delivered sync cron - manual sync in progress');
+      return;
+    }
+
     try {
       this.logger.log('Starting non-delivered orders sync job...');
       const result = await this.ordersService.syncAllNonDeliveredOrders();

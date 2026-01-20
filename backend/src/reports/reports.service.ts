@@ -186,8 +186,16 @@ export class ReportsService {
           if (!barcode) continue;
 
           const quantity = line.quantity || 0;
+          // Trendyol line yapısı:
+          // - amount: Net tutar (indirim sonrası, Trendyol'un Net Ciro'su bu)
+          // - price: Liste fiyatı (indirim öncesi)
+          // - discount: İndirim tutarı
+          const lineAmount = line.amount || 0;
           const linePrice = line.price || 0;
-          const lineRevenue = linePrice > 0 ? linePrice * quantity : (orderTotalQuantity > 0 ? (orderTotalPrice / orderTotalQuantity) * quantity : 0);
+          // Önce amount'u kullan (net tutar), yoksa price * quantity, yoksa order'dan hesapla
+          const lineRevenue = lineAmount > 0 
+            ? lineAmount 
+            : (linePrice > 0 ? linePrice * quantity : (orderTotalQuantity > 0 ? (orderTotalPrice / orderTotalQuantity) * quantity : 0));
 
           const existing = productSalesMap.get(barcode);
           if (existing) {

@@ -459,6 +459,7 @@ export class OrdersService {
     newOrdersAdded: number;
     ordersUpdated: number;
     ordersSkipped: number;
+    skippedOrders: SkippedOrder[];
     errors: number;
   }> {
     const store = await this.storesService.findOne(storeId);
@@ -546,6 +547,7 @@ export class OrdersService {
     let newOrdersAdded = 0;
     let ordersUpdated = 0;
     let ordersSkipped = 0;
+    const skippedOrders: SkippedOrder[] = [];
     let errors = 0;
 
     for (const packageId of newPackageIds) {
@@ -573,6 +575,11 @@ export class OrdersService {
 
           if (missingBarcodes.length > 0) {
             ordersSkipped++;
+            skippedOrders.push({
+              orderNumber: trendyolOrder.orderNumber,
+              shipmentPackageId: trendyolOrder.shipmentPackageId,
+              missingBarcodes,
+            });
             continue;
           }
         }
@@ -751,6 +758,7 @@ export class OrdersService {
       newOrdersAdded,
       ordersUpdated,
       ordersSkipped,
+      skippedOrders,
       errors,
     };
   }
@@ -907,6 +915,7 @@ export class OrdersService {
       newOrdersAdded: number;
       ordersUpdated: number;
       ordersSkipped: number;
+      skippedOrders: SkippedOrder[];
       errors: number;
       error?: string;
     }>;
@@ -934,6 +943,7 @@ export class OrdersService {
           newOrdersAdded: result.newOrdersAdded,
           ordersUpdated: result.ordersUpdated,
           ordersSkipped: result.ordersSkipped,
+          skippedOrders: result.skippedOrders,
           errors: result.errors,
         });
       } catch (error) {
@@ -947,6 +957,7 @@ export class OrdersService {
           newOrdersAdded: 0,
           ordersUpdated: 0,
           ordersSkipped: 0,
+          skippedOrders: [],
           errors: 1,
           error: error instanceof Error ? error.message : 'Unknown error',
         });

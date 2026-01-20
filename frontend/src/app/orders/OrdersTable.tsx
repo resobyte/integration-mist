@@ -259,6 +259,7 @@ export function OrdersTable() {
           newOrdersAdded: number;
           ordersUpdated: number;
           ordersSkipped: number;
+          skippedOrders: SkippedOrder[];
           errors: number;
           error?: string;
         }>;
@@ -295,7 +296,7 @@ export function OrdersTable() {
             updated: r.ordersUpdated,
             errors: r.errors,
             skipped: r.ordersSkipped,
-            skippedOrders: [],
+            skippedOrders: r.skippedOrders,
           }));
         setFetchResults(skippedResults);
         setShowSkippedModal(true);

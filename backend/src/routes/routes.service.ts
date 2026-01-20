@@ -435,18 +435,10 @@ export class RoutesService {
     maxTotalQuantity?: number,
     overdue?: boolean,
   ): Promise<PaginationResponse<RouteSuggestion>> {
-    const excludedStatuses = [
-      OrderStatus.COLLECTING,
-      OrderStatus.PACKED,
-      OrderStatus.SHIPPED,
-      OrderStatus.DELIVERED,
-      OrderStatus.CANCELLED,
-    ];
-
     const queryBuilder = this.orderRepository
       .createQueryBuilder('order')
       .leftJoinAndSelect('order.store', 'store')
-      .where('order.status NOT IN (:...excludedStatuses)', { excludedStatuses })
+      .where('order.status = :status', { status: OrderStatus.PENDING })
       .andWhere('order.isActive = :isActive', { isActive: true })
       .andWhere('store.isActive = :storeIsActive', { storeIsActive: true });
 
